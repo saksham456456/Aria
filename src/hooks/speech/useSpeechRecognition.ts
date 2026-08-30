@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef } from 'react';
 import { supabaseBrowser } from '@/services/supabase/client';
 
@@ -7,14 +6,22 @@ export function useSpeechRecognition(
   participantId: string | undefined,
   role: string | undefined,
   name: string | undefined,
-  isMicEnabled: boolean
+  isMicEnabled: boolean,
+  onTeacherSpeaking?: (speaking: boolean) => void
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+  const isMicEnabledRef = useRef(isMicEnabled);
+  const speakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    isMicEnabledRef.current = isMicEnabled;
+  }, [isMicEnabled]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Check for browser support
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn('Speech Recognition API not supported in this browser.');
@@ -26,6 +33,9 @@ export function useSpeechRecognition(
           recognitionRef.current.stop();
           recognitionRef.current = null;
        }
+       if (onTeacherSpeaking && role === 'teacher') {
+         onTeacherSpeaking(false);
+       }
        return;
     }
 
@@ -33,11 +43,22 @@ export function useSpeechRecognition(
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
-    recognition.interimResults = false; // We only want final results
+    recognition.interimResults = true; // Need interim for speech detection
     recognition.lang = 'en-US'; // Default, could be configurable
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = async (event: any) => {
       const result = event.results[event.results.length - 1];
+
+      // Notify speaking state
+      if (onTeacherSpeaking && role === 'teacher') {
+        onTeacherSpeaking(true);
+        if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
+        speakingTimeoutRef.current = setTimeout(() => {
+          onTeacherSpeaking(false);
+        }, 1500); // Stop speaking if no result for 1.5s
+      }
+
       if (result.isFinal) {
         const text = result[0].transcript.trim();
         if (text) {
@@ -54,13 +75,14 @@ export function useSpeechRecognition(
       }
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error', event.error);
     };
 
     recognition.onend = () => {
       // Auto-restart if mic is still enabled
-      if (isMicEnabled && recognitionRef.current) {
+      if (isMicEnabledRef.current && recognitionRef.current) {
          try {
            recognition.start();
          } catch {
@@ -81,6 +103,7 @@ export function useSpeechRecognition(
         recognitionRef.current.stop();
         recognitionRef.current = null;
       }
+      if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
     };
-  }, [isMicEnabled, participantId, sessionId, role, name]);
+  }, [isMicEnabled, participantId, sessionId, role, name, onTeacherSpeaking]);
 }

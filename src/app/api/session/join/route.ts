@@ -1,13 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = 'force-dynamic';
-
 
 import { z } from 'zod';
 import { supabaseServer } from '@/services/supabase/server';
 import { successResponse, errorResponse } from '@/lib/api';
 
 const JoinSessionSchema = z.object({
-  joinCode: z.string().length(6),
+  joinCode: z.string().length(6, 'Invalid join code format').regex(/^[A-Z0-9]{6}$/, 'Invalid join code format'),
   name: z.string().min(1).max(50),
   learningLevel: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
   language: z.enum(['en', 'hi', 'en+hi']).optional(),
@@ -67,8 +65,7 @@ export async function POST(request: Request) {
 
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {
-
-      return errorResponse('validation_error', (err as any).errors.map((e: any) => e.message).join(', '));
+      return errorResponse('validation_error', err.issues.map((e) => e.message).join(', '));
     }
     return errorResponse('internal_error', err instanceof Error ? err.message : String(err), 500);
   }

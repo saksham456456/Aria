@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 const serverEnvSchema = z.object({
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  AGORA_APP_CERTIFICATE: z.string().optional(),
-  GROQ_API_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
+  AGORA_APP_CERTIFICATE: z.string().min(1, 'AGORA_APP_CERTIFICATE is required'),
+  GROQ_API_KEY: z.string().min(1, 'GROQ_API_KEY is required'),
   ELEVENLABS_API_KEY: z.string().optional(),
   ELEVENLABS_VOICE_ID: z.string().optional(),
 });
