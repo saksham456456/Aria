@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = 'force-dynamic';
-
 
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
 import { supabaseServer } from '@/services/supabase/server';
@@ -61,7 +59,7 @@ export async function POST(request: Request) {
 
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {
-      return errorResponse('validation_error', ((err as unknown) as any).errors.map((e: any) => e.message).join(', '));
+      return errorResponse('validation_error', err.issues.map((e) => e.message).join(', '));
     }
     return errorResponse('internal_error', err instanceof Error ? err.message : String(err), 500);
   }

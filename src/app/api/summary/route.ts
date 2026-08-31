@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = 'force-dynamic';
-
 
 import { errorResponse, successResponse } from '@/lib/api';
 import { supabaseServer } from '@/services/supabase/server';
@@ -8,7 +6,7 @@ import { getGroqClient } from '@/services/groq/groqClient';
 import { z } from 'zod';
 
 const SummaryRequestSchema = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string().uuid('Invalid session ID'),
 });
 
 const SummarySchema = z.object({
@@ -54,12 +52,12 @@ export async function POST(request: Request) {
     // Check if summary already exists
     const { data: existingSummary } = await supabaseServer
       .from('session_summaries')
-      .select('id')
+      .select('*')
       .eq('session_id', data.sessionId)
       .single();
 
     if (existingSummary) {
-       return successResponse({ message: 'Summary already generated' });
+       return successResponse({ summary: existingSummary, cached: true });
     }
 
     // Fetch context
@@ -118,7 +116,7 @@ Schema: ${JSON.stringify({
     }
 
     // Upsert to ensure no duplicates
-    const { error: upsertErr } = await supabaseServer.from('session_summaries').upsert({
+    const { data: upsertData, error: upsertErr } = await supabaseServer.from('session_summaries').upsert({
        session_id: data.sessionId,
        overview: summaryData.overview,
        topics_covered: summaryData.topicsCovered,
@@ -126,15 +124,15 @@ Schema: ${JSON.stringify({
        student_insights: summaryData.studentInsights,
        aria_interventions_count: summaryData.ariaInterventionsCount,
        recommendations: summaryData.recommendations,
-    }, { onConflict: 'session_id' });
+    }, { onConflict: 'session_id' }).select().single();
 
     if (upsertErr) throw new Error(`Failed to save summary: ${upsertErr.message}`);
 
-    return successResponse({ success: true, summary: summaryData });
+    return successResponse({ success: true, summary: upsertData });
 
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {
-       return errorResponse('validation_error', (err as any).errors.map((e: any) => e.message).join(', '));
+       return errorResponse('validation_error', err.issues.map((e) => e.message).join(', '));
     }
     return errorResponse('internal_error', err instanceof Error ? err.message : String(err), 500);
   }

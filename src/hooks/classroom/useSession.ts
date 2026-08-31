@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef } from 'react';
 import { supabaseBrowser } from '@/services/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { Session } from '@/types/session'; // Added typing instead of any
 
 export function useSession(sessionId: string) {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
@@ -14,12 +14,12 @@ export function useSession(sessionId: string) {
     async function fetchSession() {
       const { data, error } = await supabaseBrowser
         .from('sessions')
-        .select('*')
+        .select('*, classrooms(name, subject, topic, grade, lesson_description, join_code)')
         .eq('id', sessionId)
         .single();
 
       if (error && isMounted) setError(error.message);
-      if (data && isMounted) setSession(data);
+      if (data && isMounted) setSession(data as unknown as Session);
     }
 
     fetchSession();
@@ -32,7 +32,12 @@ export function useSession(sessionId: string) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'sessions', filter: `id=eq.${sessionId}` },
         (payload) => {
-          if (isMounted) setSession(payload.new);
+          if (isMounted) {
+            setSession((prev: Session | null) => {
+              // Maintain classrooms relation which is not included in the payload
+              return prev ? { ...prev, ...payload.new } : (payload.new as unknown as Session);
+            });
+          }
         }
       )
       .subscribe();

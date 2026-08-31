@@ -12,3 +12,7 @@ export const getAgoraClient = (): IAgoraRTCClient => {
   }
   return agoraClientInstance;
 };
+
+export const resetAgoraClient = (): void => {
+  agoraClientInstance = null;
+};
