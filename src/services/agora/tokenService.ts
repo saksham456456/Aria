@@ -5,7 +5,7 @@ export const fetchAgoraToken = async (sessionId: string, appUserId: string): Pro
       'Content-Type': 'application/json',
       'x-user-id': appUserId,
     },
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ channelName: sessionId, uid: appUserId, role: 'publisher' }),
   });
 
   const data = await res.json();
