@@ -34,9 +34,7 @@ export default function MeetingRoom({ sessionId }: { sessionId: string }) {
     setAppUserId(id);
   }, []);
 
-  const { participants } = useParticipants(sessionId, appUserId ?? '');
-
-  if (!appUserId || participants.length === 0) {
+  if (!appUserId) {
     return (
       <div className="h-screen bg-surface-0 flex items-center justify-center">
         <div className="text-slate-400 text-sm">Loading Classroom…</div>
@@ -44,21 +42,11 @@ export default function MeetingRoom({ sessionId }: { sessionId: string }) {
     );
   }
 
-  const hasLocal = participants.some(p => p.app_user_id === appUserId);
-  if (!hasLocal) {
-    return (
-      <div className="h-screen bg-surface-0 flex items-center justify-center">
-        <div className="text-slate-400 text-sm">Waiting for identity…</div>
-      </div>
-    );
-  }
-
-  return <MeetingRoomInner sessionId={sessionId} appUserId={appUserId} participants={participants} />;
+  return <MeetingRoomInner sessionId={sessionId} appUserId={appUserId} />;
 }
 
-import { Participant } from '@/types/session';
-
-function MeetingRoomInner({ sessionId, appUserId, participants }: { sessionId: string; appUserId: string, participants: Participant[] }) {
+function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
+  const { participants } = useParticipants(sessionId, appUserId);
   const router = useRouter();
 
   const { session } = useSession(sessionId, appUserId);
