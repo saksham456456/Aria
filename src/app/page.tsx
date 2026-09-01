@@ -1,58 +1,62 @@
+'use client';
+
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Sparkles, Users, Presentation } from 'lucide-react';
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-surface-0 text-white relative overflow-hidden">
-      {/* Subtle grid background */}
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.1) 1px,transparent 1px)', backgroundSize: '40px 40px' }}
-      />
-      {/* Radial glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,rgba(124,58,237,0.08),transparent)]" />
+    <main className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
+      <div className="max-w-3xl w-full text-center space-y-8">
 
-      <div className="relative z-10 max-w-lg w-full text-center px-6 space-y-10">
-        {/* Logo */}
-        <div className="flex items-center justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-aria-purple flex items-center justify-center shadow-lg shadow-aria-purple/30">
-            <span className="text-white text-2xl font-black tracking-tighter">AI</span>
+        <div className="space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm">
+            <Sparkles className="w-4 h-4 text-purple-400" />
+            <span>The classroom&apos;s third voice</span>
           </div>
-        </div>
-
-        {/* Hero text */}
-        <div className="space-y-3">
-          <h1 className="text-6xl font-black tracking-tight bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">
-            ARIA
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-zinc-100">
+            ARIA <span className="text-purple-400">Co-Teacher</span>
           </h1>
-          <p className="text-xl font-semibold text-slate-200">Co-Teacher</p>
-          <p className="text-slate-400 text-base leading-relaxed max-w-sm mx-auto">
-            The classroom&apos;s third voice — real-time AI that listens, adapts, and intervenes.
+          <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
+            Real-time AI that listens, adapts, and intervenes in your live digital classroom.
           </p>
         </div>
 
-        {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/classroom/create"
-            className="w-full sm:w-auto px-8 py-3.5 bg-aria-purple hover:bg-aria-purple/80 text-white font-semibold rounded-xl text-sm transition-all shadow-lg shadow-aria-purple/20 hover:shadow-aria-purple/30"
-          >
-            Create Classroom
-          </Link>
-          <Link
-            href="/classroom/join"
-            className="w-full sm:w-auto px-8 py-3.5 bg-transparent hover:bg-surface-2 text-white font-semibold rounded-xl text-sm border border-surface-3 hover:border-slate-500 transition-all"
-          >
-            Join Classroom
-          </Link>
-        </div>
+        <div className="grid md:grid-cols-2 gap-6 pt-8">
+          <Card className="bg-zinc-900/50 border-zinc-800 text-left hover:border-zinc-700 transition-colors">
+            <CardHeader>
+              <Presentation className="w-8 h-8 text-purple-400 mb-2" />
+              <CardTitle className="text-zinc-100">I am a Teacher</CardTitle>
+              <CardDescription className="text-zinc-400">
+                Start a new live classroom with ARIA as your co-teacher.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/classroom/create">
+                <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                  Create Classroom
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        {/* Feature chips */}
-        <div className="flex items-center justify-center gap-2 flex-wrap">
-          {['Real-time voice', 'Gap detection', 'Live transcript', 'Post-session report'].map(f => (
-            <span key={f} className="text-xs text-slate-500 bg-surface-2 border border-surface-3 px-3 py-1 rounded-full">
-              {f}
-            </span>
-          ))}
+          <Card className="bg-zinc-900/50 border-zinc-800 text-left hover:border-zinc-700 transition-colors">
+            <CardHeader>
+              <Users className="w-8 h-8 text-blue-400 mb-2" />
+              <CardTitle className="text-zinc-100">I am a Student</CardTitle>
+              <CardDescription className="text-zinc-400">
+                Join an existing classroom using a code provided by your teacher.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/classroom/join">
+                <Button variant="outline" className="w-full border-zinc-700 hover:bg-zinc-800 text-zinc-200">
+                  Join Classroom
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </main>

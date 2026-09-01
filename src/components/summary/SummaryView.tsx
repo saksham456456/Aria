@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -5,43 +6,22 @@ import { useRouter } from 'next/navigation';
 import { SessionSummary } from '@/types/session';
 import { supabaseBrowser } from '@/services/supabase/client';
 
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Loader2, ArrowLeft, BookOpen, BrainCircuit, Users, Target, Lightbulb } from 'lucide-react';
+
 type ViewState = 'loading' | 'generating' | 'ready' | 'error' | 'no-access';
-
-interface SummarySection {
-  icon:     string;
-  title:    string;
-  color:    string;
-  children: React.ReactNode;
-}
-
-function Card({ icon, title, color, children }: SummarySection) {
-  return (
-    <div className="bg-surface-1 border border-surface-3 rounded-2xl p-6">
-      <div className={`flex items-center gap-2 mb-4 ${color}`}>
-        <span className="text-lg">{icon}</span>
-        <h3 className="font-semibold text-sm uppercase tracking-wide">{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Chip({ text }: { text: string }) {
-  return (
-    <span className="inline-block bg-surface-2 border border-surface-3 text-slate-300 text-xs px-3 py-1 rounded-full">
-      {text}
-    </span>
-  );
-}
 
 export default function SummaryView({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
   const router = useRouter();
   const [viewState, setViewState] = useState<ViewState>('loading');
-  const [summary,   setSummary]   = useState<SessionSummary | null>(null);
-  const [isTeacher, setIsTeacher] = useState(false);
-  const [error,     setError]     = useState('');
+  const [summary, setSummary] = useState<SessionSummary | null>(null);
 
-  const fetchExistingSummary = useCallback(async () => {
+  const fetchSummary = useCallback(async () => {
     const { data: pData } = await supabaseBrowser
       .from('participants')
       .select('role')
@@ -49,239 +29,226 @@ export default function SummaryView({ sessionId, appUserId }: { sessionId: strin
       .eq('app_user_id', appUserId)
       .single();
 
-    const teacher = pData?.role === 'teacher';
-    setIsTeacher(teacher);
+    if (!pData || pData.role !== 'teacher') {
+      setViewState('no-access');
+      return;
+    }
 
-    if (!teacher) { setViewState('no-access'); return null; }
-
-    const { data } = await supabaseBrowser
+    const { data: sData } = await supabaseBrowser
       .from('session_summaries')
       .select('*')
       .eq('session_id', sessionId)
-      .maybeSingle();
+      .single();
 
-    return data as SessionSummary | null;
-  }, [sessionId, appUserId]);
-
-  const generateSummary = useCallback(async () => {
-    setViewState('generating');
-    setError('');
-    try {
-      const res = await fetch('/api/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': appUserId },
-        body: JSON.stringify({ sessionId }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error.message);
-      setSummary(json.data.summary as SessionSummary);
+    if (sData) {
+      setSummary(sData as SessionSummary);
       setViewState('ready');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+
+    setViewState('generating');
+
+    // Check session data and trigger generation
+    const { data: sessData } = await supabaseBrowser.from('sessions').select('*, classrooms(*)').eq('id', sessionId).single();
+    const { data: transcripts } = await supabaseBrowser.from('transcript_segments').select('*').eq('session_id', sessionId).order('created_at', { ascending: true });
+    const { data: gaps } = await supabaseBrowser.from('learning_gaps').select('*').eq('session_id', sessionId);
+
+    try {
+      const res = await fetch('/api/session/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionData: sessData, transcripts, learningGaps: gaps })
+      });
+      const generated = await res.json();
+
+      const { data: inserted, error } = await supabaseBrowser
+        .from('session_summaries')
+        .insert({
+          session_id: sessionId,
+          overview: generated.overview,
+          topics_covered: generated.topics_covered,
+          common_learning_gaps: generated.common_learning_gaps,
+          student_insights: generated.student_insights,
+          recommendations: generated.recommendations,
+          aria_interventions_count: gaps?.length || 0
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      setSummary(inserted as SessionSummary);
+      setViewState('ready');
+    } catch (e) {
+      console.error(e);
       setViewState('error');
     }
   }, [sessionId, appUserId]);
 
   useEffect(() => {
-    (async () => {
-      const existing = await fetchExistingSummary();
-      if (existing) {
-        setSummary(existing);
-        setViewState('ready');
-      } else if (isTeacher) {
-        // Auto-generate if teacher and no summary exists yet
-        await generateSummary();
-      } else {
-        setViewState('no-access');
-      }
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appUserId, sessionId]);
+    fetchSummary();
+  }, [fetchSummary]);
 
-  const BackButton = () => (
-    <button
-      onClick={() => router.push('/')}
-      className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
-    >
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-      </svg>
-      Back to Home
-    </button>
-  );
-
-  if (viewState === 'loading' || viewState === 'generating') {
+  if (viewState === 'no-access') {
     return (
-      <div className="min-h-screen bg-surface-0 flex flex-col items-center justify-center gap-4 text-white">
-        <div className="w-10 h-10 border-2 border-aria-purple border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-400 text-sm">
-          {viewState === 'generating' ? 'Generating your session summary with ARIA…' : 'Loading summary…'}
-        </p>
-        <p className="text-slate-600 text-xs">This may take 10–20 seconds</p>
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 text-center space-y-4 text-zinc-100">
+        <h2 className="text-xl font-bold">Access Denied</h2>
+        <p className="text-zinc-400">Only the teacher can view the post-class summary.</p>
+        <Button onClick={() => router.push('/')} variant="outline" className="bg-transparent text-white border-zinc-700 hover:bg-zinc-800">Return Home</Button>
       </div>
     );
   }
 
-  if (viewState === 'no-access') {
+  if (viewState === 'loading' || viewState === 'generating') {
     return (
-      <div className="min-h-screen bg-surface-0 flex items-center justify-center p-6 text-white">
-        <div className="text-center max-w-sm">
-          <p className="text-slate-400 mb-6 text-sm">The session summary is only available to the instructor.</p>
-          <BackButton />
-        </div>
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 text-zinc-100 space-y-4">
+        <Loader2 className="w-10 h-10 animate-spin text-purple-500" />
+        <p className="text-zinc-400 animate-pulse">
+          {viewState === 'generating' ? 'ARIA is analyzing the session transcript...' : 'Loading summary...'}
+        </p>
       </div>
     );
   }
 
   if (viewState === 'error' || !summary) {
     return (
-      <div className="min-h-screen bg-surface-0 flex items-center justify-center p-6 text-white">
-        <div className="bg-surface-1 border border-surface-3 rounded-2xl p-8 max-w-sm w-full text-center space-y-4">
-          <div className="text-live-red text-4xl">⚠</div>
-          <h2 className="text-lg font-bold">Summary generation failed</h2>
-          {error && <p className="text-slate-400 text-sm">{error}</p>}
-          <div className="flex flex-col gap-2">
-            {isTeacher && (
-              <button
-                onClick={generateSummary}
-                className="w-full py-2.5 bg-aria-purple hover:bg-aria-purple/80 text-white rounded-xl text-sm font-semibold transition-colors"
-              >
-                Retry Summary
-              </button>
-            )}
-            <BackButton />
-          </div>
-        </div>
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 text-zinc-100 space-y-4">
+        <h2 className="text-xl font-bold text-red-400">Failed to generate summary</h2>
+        <Button onClick={() => router.push('/')} variant="outline" className="bg-transparent text-white border-zinc-700 hover:bg-zinc-800">Return Home</Button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-surface-0 text-white">
-      <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 md:p-8">
+      <div className="max-w-5xl mx-auto space-y-8">
+
         {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mb-1">Session complete</p>
-            <h1 className="text-3xl font-black tracking-tight">Class Summary</h1>
+            <Button variant="ghost" onClick={() => router.push('/')} className="mb-4 text-zinc-400 hover:text-white pl-0">
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
+            </Button>
+            <h1 className="text-3xl font-bold tracking-tight">Post-Class Report</h1>
+            <p className="text-zinc-400 mt-1">Generated by ARIA AI</p>
           </div>
-          <div className="flex items-center gap-3">
-            {isTeacher && (
-              <button
-                onClick={generateSummary}
-                className="text-xs text-slate-400 hover:text-white border border-surface-3 hover:border-slate-500 px-3 py-2 rounded-xl transition-colors"
-              >
-                Regenerate
-              </button>
-            )}
-            <button
-              onClick={() => router.push('/')}
-              className="px-4 py-2 bg-aria-purple hover:bg-aria-purple/80 text-white rounded-xl text-sm font-semibold transition-colors"
-            >
-              Back to Home
-            </button>
+          <div className="flex gap-2">
+            <Badge variant="secondary" className="bg-purple-900/50 text-purple-200 hover:bg-purple-900/50">
+              {summary.aria_interventions_count} AI Interventions
+            </Badge>
           </div>
         </div>
 
-        {/* ARIA interventions badge */}
-        <div className="inline-flex items-center gap-2 bg-aria-purple/10 border border-aria-purple/20 rounded-full px-4 py-2">
-          <span className="text-aria-purple-light font-bold text-lg">{summary.aria_interventions_count ?? 0}</span>
-          <span className="text-aria-purple-light text-sm">ARIA interventions during this session</span>
-        </div>
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="bg-zinc-900 border border-zinc-800">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="insights">Student Insights</TabsTrigger>
+            <TabsTrigger value="gaps">Learning Gaps</TabsTrigger>
+          </TabsList>
 
-        {/* Overview */}
-        {summary.overview && (
-          <Card icon="📋" title="Overview" color="text-slate-300">
-            <p className="text-slate-300 text-sm leading-relaxed">{summary.overview}</p>
-          </Card>
-        )}
+          <div className="mt-6">
+            <TabsContent value="overview" className="space-y-6 mt-0">
+              <Card className="bg-zinc-900 border-zinc-800">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-zinc-100">
+                    <BookOpen className="w-5 h-5 mr-2 text-blue-400" /> Executive Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-zinc-300 leading-relaxed">{summary.overview}</p>
+                </CardContent>
+              </Card>
 
-        {/* Topics covered */}
-        {summary.topics_covered?.length > 0 && (
-          <Card icon="📚" title="Topics Covered" color="text-role-teacher">
-            <div className="flex flex-wrap gap-2">
-              {summary.topics_covered.map((t, i) => <Chip key={i} text={t} />)}
-            </div>
-          </Card>
-        )}
+              <div className="grid md:grid-cols-2 gap-6">
+                <Card className="bg-zinc-900 border-zinc-800">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-zinc-100">
+                      <Target className="w-5 h-5 mr-2 text-emerald-400" /> Topics Covered
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {summary.topics_covered?.map((topic, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                          <span className="text-zinc-300">{topic}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
 
-        {/* Learning gaps */}
-        {summary.common_learning_gaps?.length > 0 && (
-          <Card icon="⚠️" title="Learning Gaps" color="text-warning-amber">
-            <div className="space-y-3">
-              {summary.common_learning_gaps.map((g, i) => (
-                <div key={i} className="bg-surface-2 border border-surface-3 rounded-xl p-4">
-                  <p className="font-semibold text-sm text-white mb-1">{g.concept}</p>
-                  <p className="text-xs text-slate-400 mb-2 leading-relaxed">{g.description}</p>
-                  {g.affectedStudents?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {g.affectedStudents.map((s, j) => (
-                        <span key={j} className="text-[10px] bg-live-red/10 border border-live-red/20 text-live-red px-2 py-0.5 rounded-full">{s}</span>
+                <Card className="bg-zinc-900 border-zinc-800">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-zinc-100">
+                      <Lightbulb className="w-5 h-5 mr-2 text-amber-400" /> Recommendations
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-zinc-300 leading-relaxed">{summary.recommendations}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="insights" className="mt-0">
+              <Card className="bg-zinc-900 border-zinc-800">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-zinc-100">
+                    <Users className="w-5 h-5 mr-2 text-purple-400" /> Individual Student Insights
+                  </CardTitle>
+                  <CardDescription className="text-zinc-400">Personalized feedback based on participation</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px] pr-4">
+                    <div className="space-y-6">
+                      {Object.entries(summary.student_insights || {}).map(([student, insight]: [string, any], i) => (
+                        <div key={i} className="space-y-2">
+                          <h4 className="font-semibold text-zinc-200 flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs">
+                              {student.substring(0, 2).toUpperCase()}
+                            </span>
+                            {student}
+                          </h4>
+                          <p className="text-zinc-400 text-sm pl-10">{insight.progress || insight}</p>
+                          {i < Object.keys(summary.student_insights || {}).length - 1 && (
+                            <Separator className="bg-zinc-800 my-4 ml-10" />
+                          )}
+                        </div>
                       ))}
                     </div>
-                  )}
-                  <p className="text-xs text-connected-green leading-relaxed">
-                    <span className="font-semibold">Recommendation: </span>{g.recommendation}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-        {/* Student insights */}
-        {summary.student_insights?.length > 0 && (
-          <Card icon="👤" title="Student Insights" color="text-role-student">
-            <div className="space-y-3">
-              {summary.student_insights.map((s, i) => (
-                <div key={i} className="bg-surface-2 border border-surface-3 rounded-xl p-4">
-                  <p className="font-semibold text-sm text-white mb-2">{s.studentName}</p>
-                  {s.strengths?.length > 0 && (
-                    <div className="mb-2">
-                      <p className="text-[10px] font-semibold text-connected-green uppercase tracking-wide mb-1">Strengths</p>
-                      <ul className="space-y-0.5">
-                        {s.strengths.map((str, j) => (
-                          <li key={j} className="text-xs text-slate-300 flex items-start gap-1.5">
-                            <span className="text-connected-green mt-0.5">✓</span>{str}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {s.needsSupport?.length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-semibold text-warning-amber uppercase tracking-wide mb-1">Needs Support</p>
-                      <ul className="space-y-0.5">
-                        {s.needsSupport.map((n, j) => (
-                          <li key={j} className="text-xs text-slate-300 flex items-start gap-1.5">
-                            <span className="text-warning-amber mt-0.5">→</span>{n}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Recommendations */}
-        {summary.recommendations && (
-          <Card icon="💡" title="Recommendations" color="text-aria-purple-light">
-            <p className="text-slate-300 text-sm leading-relaxed">{summary.recommendations}</p>
-          </Card>
-        )}
-
-        {/* Footer */}
-        <div className="pt-4 pb-10 text-center">
-          <button
-            onClick={() => router.push('/')}
-            className="px-6 py-3 bg-surface-1 hover:bg-surface-2 border border-surface-3 hover:border-slate-500 text-white rounded-xl text-sm font-semibold transition-colors"
-          >
-            ← Back to Home
-          </button>
-        </div>
+            <TabsContent value="gaps" className="mt-0">
+              <Card className="bg-zinc-900 border-zinc-800">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-zinc-100">
+                    <BrainCircuit className="w-5 h-5 mr-2 text-red-400" /> Identified Learning Gaps
+                  </CardTitle>
+                  <CardDescription className="text-zinc-400">Concepts that required further explanation</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {(summary.common_learning_gaps as any[])?.map((gap: any, i: number) => (
+                      <div key={i} className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-semibold text-zinc-200">{gap.concept}</h4>
+                          <Badge variant="outline" className="text-red-400 border-red-900 bg-red-950/30">Needs Review</Badge>
+                        </div>
+                        <p className="text-sm text-zinc-400">{gap.description}</p>
+                      </div>
+                    ))}
+                    {(!summary.common_learning_gaps || (summary.common_learning_gaps as any[]).length === 0) && (
+                      <p className="text-zinc-500 text-center py-8">No significant learning gaps were identified during this session.</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </div>
+        </Tabs>
       </div>
     </div>
   );
