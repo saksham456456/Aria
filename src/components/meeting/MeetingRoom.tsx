@@ -9,6 +9,7 @@ import { useParticipants } from '@/hooks/classroom/useParticipants';
 import { useChat } from '@/hooks/classroom/useChat';
 import { useSpeechRecognition } from '@/hooks/speech/useSpeechRecognition';
 import { getSupabaseBrowser, supabaseBrowser } from '@/services/supabase/client';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 import MeetingHeader from './MeetingHeader';
 import VideoGrid from './VideoGrid';
@@ -88,39 +89,56 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     agoraClient: isTeacher ? agoraClient : null,
     isTeacherSpeaking,
   });
-
-
   const handleSpeakingChange = useCallback((speaking: boolean) => {
     setIsTeacherSpeaking(speaking);
   }, []);
 
-  // Listen for room commands (like mute-all)
+  const commandsChannelRef = useRef<RealtimeChannel | null>(null);
+  const toggleMicRef = useRef(toggleMic);
+  const isMicEnabledRef = useRef(isMicEnabled);
+
   useEffect(() => {
-    if (isTeacher) return;
+    toggleMicRef.current = toggleMic;
+    isMicEnabledRef.current = isMicEnabled;
+  }, [toggleMic, isMicEnabled]);
+
+  // Unified room commands channel
+  useEffect(() => {
     const supabase = getSupabaseBrowser(appUserId);
-    const channel = supabase.channel(`room_commands:${sessionId}`)
-      .on(
+    const channel = supabase.channel(`room_commands:${sessionId}`);
+
+    if (!isTeacher) {
+      channel.on(
         'broadcast',
         { event: 'mute_all' },
         async () => {
-          if (isMicEnabled && localParticipant) {
-             await toggleMic();
+          if (isMicEnabledRef.current) {
+             await toggleMicRef.current();
           }
         }
-      )
-      .subscribe();
+      );
+    }
 
-    return () => { supabase.removeChannel(channel); };
-  }, [sessionId, appUserId, isTeacher, isMicEnabled, toggleMic, localParticipant]);
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED' && isTeacher) {
+        commandsChannelRef.current = channel;
+      }
+    });
+
+    return () => {
+      commandsChannelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId, appUserId, isTeacher]);
 
   const handleMuteAll = useCallback(() => {
-    if (!isTeacher) return;
-    const supabase = getSupabaseBrowser(appUserId);
-    supabase.channel(`room_commands:${sessionId}`).send({
+    if (!isTeacher || !commandsChannelRef.current) return;
+    commandsChannelRef.current.send({
       type: 'broadcast',
       event: 'mute_all',
-    });
-  }, [sessionId, appUserId, isTeacher]);
+    }).catch(() => {});
+  }, [isTeacher]);
+
 
 
   useSpeechRecognition(
