@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAgoraMeeting } from '@/hooks/meeting/useAgoraMeeting';
 import { useAria } from '@/hooks/aria/useAria';
