@@ -1,4 +1,4 @@
-import { MeetingRoom } from '@/components/MeetingRoom';
+import MeetingRoom from '@/components/meeting/MeetingRoom';
 import { supabaseServer } from '@/services/supabase/server';
 import { redirect } from 'next/navigation';
 
@@ -9,18 +9,9 @@ export default async function RoomPage({ params }: { params: { sessionId: string
     .eq('id', params.sessionId)
     .single();
 
-  if (!session) {
+  if (!session || session.status === 'ended') {
     redirect('/');
   }
 
-  return (
-    <MeetingRoom
-      sessionId={params.sessionId}
-      channelName={params.sessionId}
-      userId="dummy-user" // we will need to load this on client side or pass differently
-      userName="Participant"
-      role="student"
-      lessonContext={session.classrooms}
-    />
-  );
+  return <MeetingRoom sessionId={params.sessionId} />;
 }
