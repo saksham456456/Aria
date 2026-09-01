@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabaseBrowser } from '@/services/supabase/client';
+import { getSupabaseBrowser } from '@/services/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Participant } from '@/types/session';
 
-export function useParticipants(sessionId: string) {
+export function useParticipants(sessionId: string, appUserId: string) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
@@ -11,7 +11,8 @@ export function useParticipants(sessionId: string) {
     let isMounted = true;
 
     async function fetchParticipants() {
-      const { data } = await supabaseBrowser
+      const supabase = getSupabaseBrowser(appUserId);
+      const { data } = await supabase
         .from('participants')
         .select('*')
         .eq('session_id', sessionId)
@@ -24,7 +25,8 @@ export function useParticipants(sessionId: string) {
 
     if (channelRef.current) return;
 
-    const channel = supabaseBrowser
+    const supabase = getSupabaseBrowser(appUserId);
+    const channel = supabase
       .channel(`participants:${sessionId}`)
       .on(
         'postgres_changes',
@@ -49,10 +51,11 @@ export function useParticipants(sessionId: string) {
 
     return () => {
       isMounted = false;
-      supabaseBrowser.removeChannel(channel);
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, appUserId]);
 
   return { participants };
 }

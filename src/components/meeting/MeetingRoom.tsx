@@ -47,9 +47,9 @@ export default function MeetingRoom({ sessionId }: { sessionId: string }) {
 function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
   const router = useRouter();
 
-  const { session } = useSession(sessionId);
-  const { participants } = useParticipants(sessionId);
-  const { messages, sendMessage } = useChat(sessionId);
+  const { session } = useSession(sessionId, appUserId);
+  const { participants } = useParticipants(sessionId, appUserId);
+  const { messages, sendMessage } = useChat(sessionId, appUserId);
 
   const [activePanel, setActivePanel] = useState<'chat' | 'participants' | 'aria' | null>(null);
   const [showEndDialog, setShowEndDialog] = useState(false);
@@ -89,9 +89,39 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     isTeacherSpeaking,
   });
 
+
   const handleSpeakingChange = useCallback((speaking: boolean) => {
     setIsTeacherSpeaking(speaking);
   }, []);
+
+  // Listen for room commands (like mute-all)
+  useEffect(() => {
+    if (isTeacher) return;
+    const supabase = getSupabaseBrowser(appUserId);
+    const channel = supabase.channel(`room_commands:${sessionId}`)
+      .on(
+        'broadcast',
+        { event: 'mute_all' },
+        async () => {
+          if (isMicEnabled && localParticipant) {
+             await toggleMic();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [sessionId, appUserId, isTeacher, isMicEnabled, toggleMic, localParticipant]);
+
+  const handleMuteAll = useCallback(() => {
+    if (!isTeacher) return;
+    const supabase = getSupabaseBrowser(appUserId);
+    supabase.channel(`room_commands:${sessionId}`).send({
+      type: 'broadcast',
+      event: 'mute_all',
+    });
+  }, [sessionId, appUserId, isTeacher]);
+
 
   useSpeechRecognition(
     sessionId,
@@ -166,7 +196,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main content */}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
           <VideoGrid>
             {/* Local user */}
             <VideoTile
@@ -178,8 +208,8 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
               hasVideo={isCameraEnabled}
             />
 
-            {/* ARIA tile — only shown to teachers */}
-            {isTeacher && <AriaTile state={ariaState} />}
+            {/* ARIA tile */}
+            <AriaTile state={ariaState} />
 
             {/* Remote users */}
             {Object.values(remoteUsers).map(user => {
@@ -196,6 +226,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             })}
           </VideoGrid>
 
+          {/* Meeting Controls are now absolutely positioned inside the flex container */}
           <MeetingControls
             isMicEnabled={isMicEnabled}
             isCameraEnabled={isCameraEnabled}
@@ -222,12 +253,16 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             onClose={() => setActivePanel(null)}
           />
         )}
+
         {activePanel === 'participants' && (
           <ParticipantsPanel
             participants={participants}
             onClose={() => setActivePanel(null)}
+            isTeacher={isTeacher}
+            onMuteAll={handleMuteAll}
           />
         )}
+
         {activePanel === 'aria' && isTeacher && agoraClient && (
           <AriaPanel
             sessionId={sessionId}

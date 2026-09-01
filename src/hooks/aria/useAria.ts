@@ -41,13 +41,26 @@ export function useAria({
   useEffect(() => { ariaModeRef.current   = ariaMode;   }, [ariaMode]);
   useEffect(() => { ariaPausedRef.current = ariaPaused; }, [ariaPaused]);
 
-  // Sync voice state to ariaState
+
+  // Sync voice state to ariaState and broadcast it
   useEffect(() => {
-    if (voiceState === 'speaking') setAriaState('speaking');
-    else if (voiceState === 'fetching') setAriaState('thinking');
-    else if (ariaPausedRef.current) setAriaState('paused');
-    else setAriaState('listening');
-  }, [voiceState]);
+    let newState: AriaState = 'listening';
+    if (voiceState === 'speaking') newState = 'speaking';
+    else if (voiceState === 'fetching') newState = 'thinking';
+    else if (ariaPausedRef.current) newState = 'paused';
+
+    setAriaState(newState);
+
+    if (role === 'teacher') {
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.channel(`aria_state:${sessionId}`).send({
+        type: 'broadcast',
+        event: 'state_change',
+        payload: { state: newState }
+      });
+    }
+  }, [voiceState, role, sessionId, appUserId]);
+
 
   const evaluateAndSpeak = useCallback(async (teacherCommand?: string) => {
     if (!agoraClient) return;
@@ -78,12 +91,32 @@ export function useAria({
 
       if (!res.ok) {
         setAriaState('listening');
+
+    if (role === 'teacher') {
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.channel(`aria_state:${sessionId}`).send({
+        type: 'broadcast',
+        event: 'state_change',
+        payload: { state: 'listening' }
+      });
+    }
+
         return;
       }
 
       const json = await res.json();
       if (!json.success) {
         setAriaState('listening');
+
+    if (role === 'teacher') {
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.channel(`aria_state:${sessionId}`).send({
+        type: 'broadcast',
+        event: 'state_change',
+        payload: { state: 'listening' }
+      });
+    }
+
         return;
       }
 
@@ -102,12 +135,32 @@ export function useAria({
         });
       } else {
         setAriaState('listening');
+
+    if (role === 'teacher') {
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.channel(`aria_state:${sessionId}`).send({
+        type: 'broadcast',
+        event: 'state_change',
+        payload: { state: 'listening' }
+      });
+    }
+
       }
     } catch (err) {
       console.error('[ARIA] evaluation error', err);
       setAriaState('listening');
+
+    if (role === 'teacher') {
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.channel(`aria_state:${sessionId}`).send({
+        type: 'broadcast',
+        event: 'state_change',
+        payload: { state: 'listening' }
+      });
     }
-  }, [agoraClient, voiceState, isTeacherSpeaking, sessionId, appUserId, speak]);
+
+    }
+  }, [agoraClient, voiceState, isTeacherSpeaking, sessionId, appUserId, speak, role]);
 
   const sendCommand = useCallback((command: string) => {
     setLastCommand(command);
@@ -154,16 +207,56 @@ export function useAria({
     return () => { supabase.removeChannel(channel); };
   }, [sessionId, appUserId, role, evaluateAndSpeak]);
 
-  const pauseAria = useCallback(() => {
+
+  // Receive ARIA state broadcasts (for students)
+  useEffect(() => {
+    if (role === 'teacher') return;
+
+    const supabase = getSupabaseBrowser(appUserId);
+    const channel = supabase.channel(`aria_state:${sessionId}`)
+      .on(
+        'broadcast',
+        { event: 'state_change' },
+        (payload) => {
+          setAriaState(payload.payload.state as AriaState);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [role, sessionId, appUserId]);
+
+  // Update state when manually pausing/resuming and broadcast
+const pauseAria = useCallback(() => {
     setAriaPaused(true);
     setAriaState('paused');
+
+    if (role === 'teacher') {
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.channel(`aria_state:${sessionId}`).send({
+        type: 'broadcast',
+        event: 'state_change',
+        payload: { state: 'paused' }
+      });
+    }
+
     if (evalIntervalRef.current) clearInterval(evalIntervalRef.current);
-  }, []);
+  }, [role, sessionId, appUserId]);
 
   const resumeAria = useCallback(() => {
     setAriaPaused(false);
     setAriaState('listening');
-  }, []);
+
+    if (role === 'teacher') {
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.channel(`aria_state:${sessionId}`).send({
+        type: 'broadcast',
+        event: 'state_change',
+        payload: { state: 'listening' }
+      });
+    }
+
+  }, [role, sessionId, appUserId]);
 
   return {
     ariaMode,

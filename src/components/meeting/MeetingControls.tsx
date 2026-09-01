@@ -33,18 +33,17 @@ function CtrlBtn({ onClick, label, icon, active, danger, highlight, title }: Ctr
     <button
       onClick={onClick}
       title={title ?? label}
-      className={`relative flex flex-col items-center gap-1 px-2 sm:px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 select-none ${
+      className={`relative flex items-center justify-center w-12 h-12 rounded-full transition-all duration-200 select-none ${
         danger
-          ? 'bg-live-red/15 hover:bg-live-red text-live-red hover:text-white'
+          ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
           : active
-          ? 'bg-surface-3 text-white'
-          : 'bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-white'
+          ? 'bg-surface-3 hover:bg-surface-4 text-white'
+          : 'bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white'
       }`}
     >
-      <span className="text-lg leading-none">{icon}</span>
-      <span className="hidden sm:block whitespace-nowrap">{label}</span>
+      {icon}
       {highlight && (
-        <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-aria-purple text-white rounded px-1 leading-none py-0.5">
+        <span className="absolute 0 text-[9px] font-bold bg-aria-purple text-white rounded px-1 leading-none py-0.5">
           {highlight}
         </span>
       )}
@@ -71,7 +70,7 @@ export default function MeetingControls({
   onToggleChat, onToggleParticipants, onToggleAria, onLeave,
 }: MeetingControlsProps) {
   return (
-    <div className="flex items-center justify-center gap-2 p-3 bg-surface-1 border-t border-surface-3 flex-wrap">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center justify-center gap-3 p-3 bg-surface-1/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50">
       {/* Core media controls */}
       <CtrlBtn
         onClick={onToggleMic}
@@ -99,7 +98,7 @@ export default function MeetingControls({
       />
 
       {/* Separator */}
-      <div className="h-8 w-px bg-surface-3 hidden sm:block" />
+      <div className="h-8 w-px bg-white/10 mx-1" />
 
       {/* Panel toggles */}
       <CtrlBtn
@@ -128,7 +127,7 @@ export default function MeetingControls({
       )}
 
       {/* Separator */}
-      <div className="h-8 w-px bg-surface-3 hidden sm:block" />
+      <div className="h-8 w-px bg-white/10 mx-1" />
 
       {/* Leave */}
       <CtrlBtn
