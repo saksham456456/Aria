@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
 
     if (!appId || !appCertificate) {
-      return NextResponse.json({ error: 'Agora credentials missing' }, { status: 500 });
+      return NextResponse.json({ success: false, error: { code: 'missing_credentials', message: 'Agora credentials missing' } }, { status: 500 });
     }
 
     const rtcRole = role === 'publisher' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
       privilegeExpiredTs
     );
 
-    return NextResponse.json({ token, uid, channelName });
+    return NextResponse.json({ success: true, data: { token, uid, channelName } });
   } catch {
-    return NextResponse.json({ error: 'Failed to generate Agora token' }, { status: 500 });
+    return NextResponse.json({ success: false, error: { code: 'token_error', message: 'Failed to generate Agora token' } }, { status: 500 });
   }
 }

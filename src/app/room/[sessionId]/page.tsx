@@ -1,26 +1,18 @@
-import { MeetingRoom } from '@/components/MeetingRoom';
-import { supabaseServer } from '@/services/supabase/server';
-import { redirect } from 'next/navigation';
+import dynamic from 'next/dynamic';
 
-export default async function RoomPage({ params }: { params: { sessionId: string } }) {
-  const { data: session } = await supabaseServer
-    .from('sessions')
-    .select('*, classrooms(*)')
-    .eq('id', params.sessionId)
-    .single();
+// MeetingRoom uses Agora SDK which requires browser APIs
+const MeetingRoom = dynamic(
+  () => import('@/components/meeting/MeetingRoom'),
+  { ssr: false, loading: () => (
+    <div className="h-screen bg-surface-0 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 border-2 border-aria-purple border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-400 text-sm">Loading classroom…</p>
+      </div>
+    </div>
+  )}
+);
 
-  if (!session) {
-    redirect('/');
-  }
-
-  return (
-    <MeetingRoom
-      sessionId={params.sessionId}
-      channelName={params.sessionId}
-      userId="dummy-user" // we will need to load this on client side or pass differently
-      userName="Participant"
-      role="student"
-      lessonContext={session.classrooms}
-    />
-  );
+export default function RoomPage({ params }: { params: { sessionId: string } }) {
+  return <MeetingRoom sessionId={params.sessionId} />;
 }
