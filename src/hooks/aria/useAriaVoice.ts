@@ -1,11 +1,21 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import AgoraRTC from 'agora-rtc-sdk-ng';
-import { IAgoraRTCClient } from 'agora-rtc-sdk-ng';
+import AgoraRTC, { IAgoraRTCClient } from 'agora-rtc-sdk-ng';
 
-type AriaVoiceState = 'idle' | 'fetching' | 'speaking' | 'error';
+export type AriaVoiceState = 'idle' | 'fetching' | 'speaking' | 'error';
 
+/**
+ * Handles ARIA voice output. Audio is published through the existing
+ * Agora client — NOT a separate bot client.
+ *
+ * Pipeline:
+ *   ElevenLabs (server) → ArrayBuffer → Web Audio API → MediaStreamDestination
+ *   → Agora custom track published on teacher's client → all participants hear it.
+ *
+ * When ElevenLabs is not configured (TTS route returns 500), falls back to
+ * browser SpeechSynthesis. In fallback mode only the local browser hears ARIA.
+ */
 export function useAriaVoice(appUserId: string) {
   const [voiceState, setVoiceState] = useState<AriaVoiceState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +31,6 @@ export function useAriaVoice(appUserId: string) {
     setError(null);
 
     try {
-      // 1. Fetch TTS audio from ElevenLabs via server route
       const response = await fetch('/api/aria/tts', {
         method: 'POST',
         headers: {
@@ -31,38 +40,47 @@ export function useAriaVoice(appUserId: string) {
         body: JSON.stringify({ text }),
       });
 
+      // ElevenLabs not configured — use browser TTS as dev fallback
       if (!response.ok) {
-        // ElevenLabs not configured — dev fallback (local only, not shared via Agora)
         if (response.status === 500) {
           console.warn(
-            '[ARIA] ElevenLabs not configured. Using browser TTS fallback.' +
-            ' Other participants will NOT hear ARIA.'
+            '[ARIA] ElevenLabs not configured. Falling back to browser SpeechSynthesis. ' +
+            'Other participants will NOT hear ARIA in this mode.'
           );
+          if (!('speechSynthesis' in window)) {
+            throw new Error('Neither ElevenLabs nor browser SpeechSynthesis is available');
+          }
           const utterance = new SpeechSynthesisUtterance(text);
+          setVoiceState('speaking');
           utterance.onend = () => {
             isPlayingRef.current = false;
             setVoiceState('idle');
           };
+          utterance.onerror = () => {
+            isPlayingRef.current = false;
+            setVoiceState('idle');
+          };
+          window.speechSynthesis.cancel();
           window.speechSynthesis.speak(utterance);
-          setVoiceState('speaking');
           return;
         }
-        throw new Error(`TTS request failed: ${response.status}`);
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson?.error?.message ?? `TTS request failed (${response.status})`);
       }
 
-      // 2. Decode audio via Web Audio API
+      // Decode the MP3 audio via Web Audio API
       const audioBuffer = await response.arrayBuffer();
       const audioCtx = new AudioContext();
       const decoded = await audioCtx.decodeAudioData(audioBuffer);
 
-      // 3. Route through MediaStreamDestination → Agora custom track
+      // Route to both Agora (remote) and local speaker (teacher hears it too)
       const destination = audioCtx.createMediaStreamDestination();
       const source = audioCtx.createBufferSource();
       source.buffer = decoded;
-      source.connect(destination);         // → Agora (everyone hears it)
-      source.connect(audioCtx.destination); // → local speaker (teacher also hears it)
+      source.connect(destination);           // → Agora → all participants
+      source.connect(audioCtx.destination); // → local speaker
 
-      // 4. Create and publish Agora custom track from the existing client
+      // Create a custom Agora audio track from the Web Audio stream
       const ariaTrack = AgoraRTC.createCustomAudioTrack({
         mediaStreamTrack: destination.stream.getAudioTracks()[0],
       });
@@ -71,12 +89,11 @@ export function useAriaVoice(appUserId: string) {
       await agoraClient.publish(ariaTrack);
       source.start();
 
-      // 5. Clean up when audio finishes
       source.onended = async () => {
         try {
           await agoraClient.unpublish(ariaTrack);
         } catch (e) {
-          console.warn('[ARIA] unpublish failed', e);
+          console.warn('[ARIA] unpublish custom track failed', e);
         }
         ariaTrack.close();
         await audioCtx.close();
@@ -85,8 +102,9 @@ export function useAriaVoice(appUserId: string) {
       };
 
     } catch (err: unknown) {
-      console.error('[ARIA] voice error', err);
-      setError(err instanceof Error ? err.message : String(err));
+      console.error('[ARIA] voice pipeline error', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
       isPlayingRef.current = false;
       setVoiceState('error');
     }
@@ -96,6 +114,7 @@ export function useAriaVoice(appUserId: string) {
     speak,
     voiceState,
     isSpeaking: voiceState === 'speaking',
+    isFetching: voiceState === 'fetching',
     error,
   };
 }

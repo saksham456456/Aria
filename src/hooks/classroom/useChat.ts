@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabaseBrowser } from '@/services/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { Message } from '@/types/session';
 
 export function useChat(sessionId: string) {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export function useChat(sessionId: string) {
         .order('created_at', { ascending: true })
         .limit(100);
 
-      if (data && isMounted) setMessages(data);
+      if (data && isMounted) setMessages(data as Message[]);
     }
 
     fetchMessages();
@@ -31,7 +31,7 @@ export function useChat(sessionId: string) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `session_id=eq.${sessionId}` },
         (payload) => {
-          if (isMounted) setMessages(prev => [...prev, payload.new]);
+          if (isMounted) setMessages(prev => [...prev, payload.new as Message]);
         }
       )
       .subscribe();
@@ -45,14 +45,20 @@ export function useChat(sessionId: string) {
     };
   }, [sessionId]);
 
-  const sendMessage = useCallback(async (participantId: string, role: string, senderName: string, text: string) => {
-     await supabaseBrowser.from('messages').insert({
-        session_id: sessionId,
-        participant_id: participantId,
-        role,
-        sender_name: senderName,
-        text
-     });
+  const sendMessage = useCallback(async (
+    participantId: string,
+    role: string,
+    senderName: string,
+    text: string
+  ) => {
+    const { error } = await supabaseBrowser.from('messages').insert({
+      session_id:     sessionId,
+      participant_id: participantId,
+      role,
+      sender_name:    senderName,
+      text,
+    });
+    if (error) console.error('[useChat] sendMessage failed', error);
   }, [sessionId]);
 
   return { messages, sendMessage };

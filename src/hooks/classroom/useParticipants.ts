@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef } from 'react';
 import { supabaseBrowser } from '@/services/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { Participant } from '@/types/session';
 
 export function useParticipants(sessionId: string) {
-  const [participants, setParticipants] = useState<any[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export function useParticipants(sessionId: string) {
         .eq('session_id', sessionId)
         .is('left_at', null);
 
-      if (data && isMounted) setParticipants(data);
+      if (data && isMounted) setParticipants(data as Participant[]);
     }
 
     fetchParticipants();
@@ -29,18 +29,18 @@ export function useParticipants(sessionId: string) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'participants', filter: `session_id=eq.${sessionId}` },
-        async (payload) => {
-           if (!isMounted) return;
-
-           if (payload.eventType === 'INSERT') {
-             setParticipants(prev => [...prev, payload.new]);
-           } else if (payload.eventType === 'UPDATE') {
-             if (payload.new.left_at) {
-                setParticipants(prev => prev.filter(p => p.id !== payload.new.id));
-             } else {
-                setParticipants(prev => prev.map(p => p.id === payload.new.id ? payload.new : p));
-             }
-           }
+        (payload) => {
+          if (!isMounted) return;
+          const p = payload.new as Participant;
+          if (payload.eventType === 'INSERT') {
+            setParticipants(prev => [...prev, p]);
+          } else if (payload.eventType === 'UPDATE') {
+            if (p.left_at) {
+              setParticipants(prev => prev.filter(x => x.id !== p.id));
+            } else {
+              setParticipants(prev => prev.map(x => x.id === p.id ? p : x));
+            }
+          }
         }
       )
       .subscribe();

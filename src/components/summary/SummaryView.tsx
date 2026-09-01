@@ -1,229 +1,287 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from 'react';
-import { supabaseBrowser } from '@/services/supabase/client';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { SessionSummary } from '@/types/session';
+import { supabaseBrowser } from '@/services/supabase/client';
+
+type ViewState = 'loading' | 'generating' | 'ready' | 'error' | 'no-access';
+
+interface SummarySection {
+  icon:     string;
+  title:    string;
+  color:    string;
+  children: React.ReactNode;
+}
+
+function Card({ icon, title, color, children }: SummarySection) {
+  return (
+    <div className="bg-surface-1 border border-surface-3 rounded-2xl p-6">
+      <div className={`flex items-center gap-2 mb-4 ${color}`}>
+        <span className="text-lg">{icon}</span>
+        <h3 className="font-semibold text-sm uppercase tracking-wide">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Chip({ text }: { text: string }) {
+  return (
+    <span className="inline-block bg-surface-2 border border-surface-3 text-slate-300 text-xs px-3 py-1 rounded-full">
+      {text}
+    </span>
+  );
+}
 
 export default function SummaryView({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
   const router = useRouter();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [summary, setSummary] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [classroom, setClassroom] = useState<{name: string, join_code: string} | null>(null);
+  const [viewState, setViewState] = useState<ViewState>('loading');
+  const [summary,   setSummary]   = useState<SessionSummary | null>(null);
+  const [isTeacher, setIsTeacher] = useState(false);
+  const [error,     setError]     = useState('');
 
-  useEffect(() => {
-    async function init() {
-      setLoading(true);
-      setError(null);
+  const fetchExistingSummary = useCallback(async () => {
+    const { data: pData } = await supabaseBrowser
+      .from('participants')
+      .select('role')
+      .eq('session_id', sessionId)
+      .eq('app_user_id', appUserId)
+      .single();
 
-      try {
-        // Fetch classroom details for header and copy code
-        const { data: sessionData } = await supabaseBrowser
-          .from('sessions')
-          .select('classrooms(name, join_code)')
-          .eq('id', sessionId)
-          .single();
+    const teacher = pData?.role === 'teacher';
+    setIsTeacher(teacher);
 
-        if (sessionData?.classrooms && !Array.isArray(sessionData.classrooms)) {
-           setClassroom(sessionData.classrooms as {name: string, join_code: string});
-        }
+    if (!teacher) { setViewState('no-access'); return null; }
 
-        // Trigger generation (idempotent, returns cached if exists)
-        const res = await fetch('/api/summary', {
-           method: 'POST',
-           headers: {
-             'Content-Type': 'application/json',
-             'x-user-id': appUserId,
-           },
-           body: JSON.stringify({ sessionId }),
-        });
+    const { data } = await supabaseBrowser
+      .from('session_summaries')
+      .select('*')
+      .eq('session_id', sessionId)
+      .maybeSingle();
 
-        const json = await res.json();
-
-        if (!res.ok || !json.success) {
-           throw new Error(json.error?.message || 'Failed to generate summary');
-        }
-
-        setSummary(json.data.summary);
-      } catch (err: unknown) {
-         console.error('Summary error:', err);
-         setError(err instanceof Error ? err.message : String(err));
-      } finally {
-         setLoading(false);
-      }
-    }
-
-    init();
+    return data as SessionSummary | null;
   }, [sessionId, appUserId]);
 
-  const handleCopyCode = () => {
-    if (classroom?.join_code) {
-      navigator.clipboard.writeText(classroom.join_code);
+  const generateSummary = useCallback(async () => {
+    setViewState('generating');
+    setError('');
+    try {
+      const res = await fetch('/api/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': appUserId },
+        body: JSON.stringify({ sessionId }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error.message);
+      setSummary(json.data.summary as SessionSummary);
+      setViewState('ready');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+      setViewState('error');
     }
-  };
+  }, [sessionId, appUserId]);
+
+  useEffect(() => {
+    (async () => {
+      const existing = await fetchExistingSummary();
+      if (existing) {
+        setSummary(existing);
+        setViewState('ready');
+      } else if (isTeacher) {
+        // Auto-generate if teacher and no summary exists yet
+        await generateSummary();
+      } else {
+        setViewState('no-access');
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appUserId, sessionId]);
+
+  const BackButton = () => (
+    <button
+      onClick={() => router.push('/')}
+      className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+    >
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+      </svg>
+      Back to Home
+    </button>
+  );
+
+  if (viewState === 'loading' || viewState === 'generating') {
+    return (
+      <div className="min-h-screen bg-surface-0 flex flex-col items-center justify-center gap-4 text-white">
+        <div className="w-10 h-10 border-2 border-aria-purple border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-400 text-sm">
+          {viewState === 'generating' ? 'Generating your session summary with ARIA…' : 'Loading summary…'}
+        </p>
+        <p className="text-slate-600 text-xs">This may take 10–20 seconds</p>
+      </div>
+    );
+  }
+
+  if (viewState === 'no-access') {
+    return (
+      <div className="min-h-screen bg-surface-0 flex items-center justify-center p-6 text-white">
+        <div className="text-center max-w-sm">
+          <p className="text-slate-400 mb-6 text-sm">The session summary is only available to the instructor.</p>
+          <BackButton />
+        </div>
+      </div>
+    );
+  }
+
+  if (viewState === 'error' || !summary) {
+    return (
+      <div className="min-h-screen bg-surface-0 flex items-center justify-center p-6 text-white">
+        <div className="bg-surface-1 border border-surface-3 rounded-2xl p-8 max-w-sm w-full text-center space-y-4">
+          <div className="text-live-red text-4xl">⚠</div>
+          <h2 className="text-lg font-bold">Summary generation failed</h2>
+          {error && <p className="text-slate-400 text-sm">{error}</p>}
+          <div className="flex flex-col gap-2">
+            {isTeacher && (
+              <button
+                onClick={generateSummary}
+                className="w-full py-2.5 bg-aria-purple hover:bg-aria-purple/80 text-white rounded-xl text-sm font-semibold transition-colors"
+              >
+                Retry Summary
+              </button>
+            )}
+            <BackButton />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0f1117] text-white p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-
+    <div className="min-h-screen bg-surface-0 text-white">
+      <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface-1 p-6 rounded-xl border border-surface-3 shadow-lg">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-             <h1 className="text-2xl font-bold text-gray-100">
-               Class ended <span className="text-gray-500 mx-2">&middot;</span> <span className="text-aria-purple-light">{classroom?.name || 'Classroom'}</span>
-             </h1>
+            <p className="text-slate-500 text-xs font-semibold uppercase tracking-widest mb-1">Session complete</p>
+            <h1 className="text-3xl font-black tracking-tight">Class Summary</h1>
           </div>
-          {classroom?.join_code && (
+          <div className="flex items-center gap-3">
+            {isTeacher && (
+              <button
+                onClick={generateSummary}
+                className="text-xs text-slate-400 hover:text-white border border-surface-3 hover:border-slate-500 px-3 py-2 rounded-xl transition-colors"
+              >
+                Regenerate
+              </button>
+            )}
             <button
-              onClick={handleCopyCode}
-              className="flex items-center gap-2 px-4 py-2 bg-surface-2 hover:bg-surface-3 rounded-lg text-sm font-medium border border-surface-3 transition-colors"
+              onClick={() => router.push('/')}
+              className="px-4 py-2 bg-aria-purple hover:bg-aria-purple/80 text-white rounded-xl text-sm font-semibold transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              Copy Code: {classroom.join_code}
+              Back to Home
             </button>
-          )}
+          </div>
         </div>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-surface-1 rounded-xl border border-surface-3">
-             <div className="w-12 h-12 border-4 border-surface-3 border-t-aria-purple rounded-full animate-spin mb-4"></div>
-             <p className="text-gray-400 animate-pulse">Analyzing transcript and generating insights...</p>
-          </div>
-        ) : error ? (
-          <div className="bg-red-500/10 border border-red-500/30 p-8 rounded-xl text-center">
-             <div className="text-live-red text-4xl mb-4">⚠️</div>
-             <h3 className="text-lg font-bold text-red-400 mb-2">Summary Generation Failed</h3>
-             <p className="text-red-300/80 mb-6">{error}</p>
-             <button
-               onClick={() => window.location.reload()}
-               className="px-6 py-2.5 bg-live-red hover:bg-red-600 text-white rounded-lg font-medium transition-colors"
-             >
-               Retry Summary
-             </button>
-          </div>
-        ) : summary ? (
-          <div className="space-y-6">
-             {/* Cards */}
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* ARIA interventions badge */}
+        <div className="inline-flex items-center gap-2 bg-aria-purple/10 border border-aria-purple/20 rounded-full px-4 py-2">
+          <span className="text-aria-purple-light font-bold text-lg">{summary.aria_interventions_count ?? 0}</span>
+          <span className="text-aria-purple-light text-sm">ARIA interventions during this session</span>
+        </div>
 
-                {/* Overview (Spans 2 cols on md) */}
-                <div className="md:col-span-2 bg-surface-1 p-6 rounded-xl border border-surface-3">
-                   <h2 className="flex items-center gap-2 text-lg font-bold mb-4 text-gray-200">
-                     <span>📋</span> Overview
-                   </h2>
-                   <p className="text-gray-300 leading-relaxed text-sm">{summary.overview}</p>
-                </div>
+        {/* Overview */}
+        {summary.overview && (
+          <Card icon="📋" title="Overview" color="text-slate-300">
+            <p className="text-slate-300 text-sm leading-relaxed">{summary.overview}</p>
+          </Card>
+        )}
 
-                {/* Stats */}
-                <div className="bg-surface-1 p-6 rounded-xl border border-surface-3 flex flex-col justify-center items-center text-center">
-                   <div className="text-4xl font-bold text-aria-purple mb-2">{summary.aria_interventions_count || 0}</div>
-                   <div className="text-sm text-gray-400 font-medium">ARIA Interventions</div>
-                </div>
+        {/* Topics covered */}
+        {summary.topics_covered?.length > 0 && (
+          <Card icon="📚" title="Topics Covered" color="text-role-teacher">
+            <div className="flex flex-wrap gap-2">
+              {summary.topics_covered.map((t, i) => <Chip key={i} text={t} />)}
+            </div>
+          </Card>
+        )}
 
-                {/* Topics Covered */}
-                <div className="md:col-span-3 bg-surface-1 p-6 rounded-xl border border-surface-3">
-                   <h2 className="flex items-center gap-2 text-lg font-bold mb-4 text-gray-200">
-                     <span>📚</span> Topics Covered
-                   </h2>
-                   <div className="flex flex-wrap gap-2">
-                      {summary.topics_covered?.map((t: string, i: number) => (
-                        <span key={i} className="px-3 py-1.5 bg-surface-2 border border-surface-3 rounded-full text-xs font-medium text-gray-300">
-                           {t}
-                        </span>
+        {/* Learning gaps */}
+        {summary.common_learning_gaps?.length > 0 && (
+          <Card icon="⚠️" title="Learning Gaps" color="text-warning-amber">
+            <div className="space-y-3">
+              {summary.common_learning_gaps.map((g, i) => (
+                <div key={i} className="bg-surface-2 border border-surface-3 rounded-xl p-4">
+                  <p className="font-semibold text-sm text-white mb-1">{g.concept}</p>
+                  <p className="text-xs text-slate-400 mb-2 leading-relaxed">{g.description}</p>
+                  {g.affectedStudents?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {g.affectedStudents.map((s, j) => (
+                        <span key={j} className="text-[10px] bg-live-red/10 border border-live-red/20 text-live-red px-2 py-0.5 rounded-full">{s}</span>
                       ))}
-                   </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-connected-green leading-relaxed">
+                    <span className="font-semibold">Recommendation: </span>{g.recommendation}
+                  </p>
                 </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
-                {/* Learning Gaps */}
-                <div className="md:col-span-3 bg-surface-1 p-6 rounded-xl border border-surface-3">
-                   <h2 className="flex items-center gap-2 text-lg font-bold mb-4 text-gray-200">
-                     <span>⚠️</span> Learning Gaps
-                   </h2>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      {summary.common_learning_gaps?.map((g: any, i: number) => (
-                         <div key={i} className="bg-surface-0 p-4 rounded-lg border border-surface-2">
-                            <strong className="block text-aria-purple-light mb-2">{g.concept}</strong>
-                            <p className="text-sm text-gray-400 mb-4">{g.description}</p>
-
-                            {g.affectedStudents && g.affectedStudents.length > 0 && (
-                               <div className="mb-3 flex flex-wrap gap-1">
-                                  {g.affectedStudents.map((s: string, j: number) => (
-                                     <span key={j} className="text-xs bg-role-student/20 text-role-student px-2 py-0.5 rounded">
-                                        {s}
-                                     </span>
-                                  ))}
-                               </div>
-                            )}
-
-                            <div className="text-sm bg-surface-2 p-3 rounded border border-surface-3 text-gray-300">
-                               <strong className="text-gray-400 mr-2">Recommendation:</strong>
-                               {g.recommendation}
-                            </div>
-                         </div>
-                      ))}
-                      {(!summary.common_learning_gaps || summary.common_learning_gaps.length === 0) && (
-                         <div className="text-gray-500 text-sm italic">No significant learning gaps identified.</div>
-                      )}
-                   </div>
+        {/* Student insights */}
+        {summary.student_insights?.length > 0 && (
+          <Card icon="👤" title="Student Insights" color="text-role-student">
+            <div className="space-y-3">
+              {summary.student_insights.map((s, i) => (
+                <div key={i} className="bg-surface-2 border border-surface-3 rounded-xl p-4">
+                  <p className="font-semibold text-sm text-white mb-2">{s.studentName}</p>
+                  {s.strengths?.length > 0 && (
+                    <div className="mb-2">
+                      <p className="text-[10px] font-semibold text-connected-green uppercase tracking-wide mb-1">Strengths</p>
+                      <ul className="space-y-0.5">
+                        {s.strengths.map((str, j) => (
+                          <li key={j} className="text-xs text-slate-300 flex items-start gap-1.5">
+                            <span className="text-connected-green mt-0.5">✓</span>{str}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {s.needsSupport?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-warning-amber uppercase tracking-wide mb-1">Needs Support</p>
+                      <ul className="space-y-0.5">
+                        {s.needsSupport.map((n, j) => (
+                          <li key={j} className="text-xs text-slate-300 flex items-start gap-1.5">
+                            <span className="text-warning-amber mt-0.5">→</span>{n}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
-                {/* Student Insights */}
-                <div className="md:col-span-3 bg-surface-1 p-6 rounded-xl border border-surface-3">
-                   <h2 className="flex items-center gap-2 text-lg font-bold mb-4 text-gray-200">
-                     <span>👤</span> Student Insights
-                   </h2>
-                   <div className="space-y-4">
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      {summary.student_insights?.map((s: any, i: number) => (
-                         <div key={i} className="bg-surface-0 p-4 rounded-lg border border-surface-2 flex flex-col md:flex-row gap-4">
-                            <div className="md:w-1/4">
-                               <strong className="text-lg">{s.studentName}</strong>
-                            </div>
-                            <div className="md:w-3/4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                               <div>
-                                  <strong className="text-connected-green mb-1 block">Strengths</strong>
-                                  <ul className="list-disc pl-4 text-gray-400 space-y-1">
-                                     {s.strengths?.map((str: string, j: number) => <li key={j}>{str}</li>)}
-                                  </ul>
-                               </div>
-                               <div>
-                                  <strong className="text-warning-amber mb-1 block">Needs Support</strong>
-                                  <ul className="list-disc pl-4 text-gray-400 space-y-1">
-                                     {s.needsSupport?.map((ns: string, j: number) => <li key={j}>{ns}</li>)}
-                                  </ul>
-                               </div>
-                            </div>
-                         </div>
-                      ))}
-                      {(!summary.student_insights || summary.student_insights.length === 0) && (
-                         <div className="text-gray-500 text-sm italic">No individual student insights generated.</div>
-                      )}
-                   </div>
-                </div>
-
-                {/* Recommendations */}
-                <div className="md:col-span-3 bg-surface-1 p-6 rounded-xl border border-surface-3">
-                   <h2 className="flex items-center gap-2 text-lg font-bold mb-4 text-gray-200">
-                     <span>💡</span> General Recommendations
-                   </h2>
-                   <p className="text-gray-300 leading-relaxed text-sm">{summary.recommendations}</p>
-                </div>
-             </div>
-          </div>
-        ) : null}
+        {/* Recommendations */}
+        {summary.recommendations && (
+          <Card icon="💡" title="Recommendations" color="text-aria-purple-light">
+            <p className="text-slate-300 text-sm leading-relaxed">{summary.recommendations}</p>
+          </Card>
+        )}
 
         {/* Footer */}
-        <div className="pt-6 flex justify-center">
-           <button
-             onClick={() => router.push('/')}
-             className="px-8 py-3 bg-surface-2 hover:bg-surface-3 border border-surface-3 text-white rounded-xl font-semibold transition-colors"
-           >
-             Back to Home
-           </button>
+        <div className="pt-4 pb-10 text-center">
+          <button
+            onClick={() => router.push('/')}
+            className="px-6 py-3 bg-surface-1 hover:bg-surface-2 border border-surface-3 hover:border-slate-500 text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            ← Back to Home
+          </button>
         </div>
-
       </div>
     </div>
   );

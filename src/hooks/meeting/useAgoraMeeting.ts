@@ -21,10 +21,11 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Refs for cleanup — never put tracks in useEffect deps
-  const localAudioTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
-  const localVideoTrackRef = useRef<ICameraVideoTrack | null>(null);
+  // Refs for tracks — never put tracks in useEffect deps (causes close-on-rerender)
+  const localAudioRef = useRef<IMicrophoneAudioTrack | null>(null);
+  const localVideoRef = useRef<ICameraVideoTrack | null>(null);
   const screenTrackRef = useRef<ILocalVideoTrack | null>(null);
+  // useRef (not a closure variable) so it persists across re-renders
   const subscribedRef = useRef<Set<string>>(new Set());
   const initRef = useRef(false);
 
@@ -36,11 +37,11 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
       setConnectionState('joining');
       const client = getAgoraClient();
       const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
-      if (!appId) throw new Error('Agora App ID not configured');
+      if (!appId) throw new Error('NEXT_PUBLIC_AGORA_APP_ID is not configured');
 
       const token = await fetchAgoraToken(sessionId, appUserId);
 
-      // ── Event handlers ────────────────────────────────────────────────
+      // ── Remote user events ──────────────────────────────────────────────
 
       client.on('user-published', async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
         const key = `${user.uid}:${mediaType}`;
@@ -50,7 +51,7 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
         await client.subscribe(user, mediaType);
 
         if (mediaType === 'audio') {
-          // Audio plays directly — no DOM element needed
+          // Play audio immediately — no DOM element needed for audio tracks
           user.audioTrack?.play();
         }
 
@@ -100,17 +101,17 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
       });
 
       client.on('connection-state-change', (curState) => {
-        const map: Record<string, ConnectionState> = {
-          DISCONNECTED: 'disconnected' as ConnectionState,
-          CONNECTING: 'connecting',
-          CONNECTED: 'connected',
-          RECONNECTING: 'reconnecting',
-          DISCONNECTING: 'disconnecting' as ConnectionState,
+        const stateMap: Record<string, ConnectionState> = {
+          DISCONNECTED:  'disconnected',
+          CONNECTING:    'connecting',
+          CONNECTED:     'connected',
+          RECONNECTING:  'reconnecting',
+          DISCONNECTING: 'disconnecting',
         };
-        setConnectionState(map[curState] ?? 'error');
+        setConnectionState(stateMap[curState] ?? 'error');
       });
 
-      // ── Join and create tracks ────────────────────────────────────────
+      // ── Join + publish ──────────────────────────────────────────────────
 
       setConnectionState('connecting');
       await client.join(appId, sessionId, token, appUserId);
@@ -120,11 +121,11 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
         { encoderConfig: '360p_7' }
       );
 
-      // Store in refs for cleanup
-      localAudioTrackRef.current = audio;
-      localVideoTrackRef.current = video;
+      // Store in refs so cleanup doesn't go stale
+      localAudioRef.current = audio;
+      localVideoRef.current = video;
 
-      // Store in state for rendering
+      // Store in state so VideoTile can render the feed
       setLocalAudioTrack(audio);
       setLocalVideoTrack(video);
 
@@ -132,90 +133,96 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
       setConnectionState('connected');
 
     } catch (err: unknown) {
-      console.error('[AGORA] join failed', err);
+      console.error('[AGORA] joinMeeting failed', err);
       setError(err instanceof Error ? err.message : String(err));
       setConnectionState('error');
-      initRef.current = false;
+      initRef.current = false; // allow retry
     }
   }, [sessionId, appUserId]);
 
-  // Single effect — no tracks in deps
+  // Single effect — tracks are NOT in deps (that would close them on every render)
   useEffect(() => {
     joinMeeting();
 
     return () => {
       const client = getAgoraClient();
       client.removeAllListeners();
-      localAudioTrackRef.current?.close();
-      localVideoTrackRef.current?.close();
+      // Use refs, not state, so we always close the actual live tracks
+      localAudioRef.current?.close();
+      localVideoRef.current?.close();
       screenTrackRef.current?.close();
-      client.leave().catch(console.error);
+      client.leave().catch(err => console.warn('[AGORA] leave error during cleanup', err));
       resetAgoraClient();
     };
   }, [joinMeeting]);
 
-  // ── Controls ─────────────────────────────────────────────────────────
+  // ── Controls ────────────────────────────────────────────────────────────
 
   const toggleMic = useCallback(async () => {
-    if (!localAudioTrackRef.current) return;
+    const track = localAudioRef.current;
+    if (!track) return;
     const next = !isMicEnabled;
-    await localAudioTrackRef.current.setEnabled(next);
+    await track.setEnabled(next);
     setIsMicEnabled(next);
   }, [isMicEnabled]);
 
   const toggleCamera = useCallback(async () => {
-    if (!localVideoTrackRef.current) return;
+    const track = localVideoRef.current;
+    if (!track) return;
     const next = !isCameraEnabled;
-    await localVideoTrackRef.current.setEnabled(next);
+    await track.setEnabled(next);
     setIsCameraEnabled(next);
   }, [isCameraEnabled]);
 
   const startScreenShare = useCallback(async () => {
+    const client = getAgoraClient();
     try {
-      const client = getAgoraClient();
-      const screenTrack = await AgoraRTC.createScreenVideoTrack({}, 'disable');
+      const screenTrack = await AgoraRTC.createScreenVideoTrack({}, 'disable') as ILocalVideoTrack;
 
-      // Handle browser ending share
-      (screenTrack as ILocalVideoTrack).on('track-ended', async () => {
-        await client.unpublish(screenTrack as ILocalVideoTrack);
-        (screenTrack as ILocalVideoTrack).close();
-        if (localVideoTrackRef.current) {
-          await client.publish(localVideoTrackRef.current);
+      // When the browser's "Stop sharing" button is clicked
+      screenTrack.on('track-ended', async () => {
+        try { await client.unpublish(screenTrack); } catch {}
+        screenTrack.close();
+        if (localVideoRef.current) {
+          await client.publish(localVideoRef.current);
         }
         screenTrackRef.current = null;
         setIsScreenSharing(false);
       });
 
-      if (localVideoTrackRef.current) {
-        await client.unpublish(localVideoTrackRef.current);
+      if (localVideoRef.current) {
+        await client.unpublish(localVideoRef.current);
       }
-      await client.publish(screenTrack as ILocalVideoTrack);
-      screenTrackRef.current = screenTrack as ILocalVideoTrack;
+      await client.publish(screenTrack);
+      screenTrackRef.current = screenTrack;
       setIsScreenSharing(true);
     } catch (err) {
-      // User cancelled permission dialog — not an error
-      console.warn('[AGORA] screen share cancelled or failed', err);
+      // User cancelled the permission dialog — not an error worth surfacing
+      console.warn('[AGORA] screen share cancelled or denied', err);
     }
   }, []);
 
   const stopScreenShare = useCallback(async () => {
     const client = getAgoraClient();
     if (screenTrackRef.current) {
-      await client.unpublish(screenTrackRef.current);
+      try { await client.unpublish(screenTrackRef.current); } catch {}
       screenTrackRef.current.close();
       screenTrackRef.current = null;
     }
-    if (localVideoTrackRef.current) {
-      await client.publish(localVideoTrackRef.current);
+    if (localVideoRef.current) {
+      await client.publish(localVideoRef.current);
     }
     setIsScreenSharing(false);
   }, []);
 
   const leave = useCallback(async () => {
     const client = getAgoraClient();
-    localAudioTrackRef.current?.close();
-    localVideoTrackRef.current?.close();
+    localAudioRef.current?.close();
+    localVideoRef.current?.close();
     screenTrackRef.current?.close();
+    localAudioRef.current = null;
+    localVideoRef.current = null;
+    screenTrackRef.current = null;
     await client.leave();
     resetAgoraClient();
     setConnectionState('ended');

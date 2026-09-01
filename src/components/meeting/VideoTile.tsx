@@ -1,64 +1,79 @@
+'use client';
+
 import { useEffect, useRef } from 'react';
 import { ILocalVideoTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
+import { AgoraUser } from '@/types/agora';
 
 type VideoTileProps = {
-  user?: { uid: string; hasAudio: boolean; hasVideo: boolean; videoTrack?: IRemoteVideoTrack };
-  isLocal?: boolean;
-  name?: string;
-  role?: string;
-  track?: ILocalVideoTrack | IRemoteVideoTrack | null;
-  hasAudio?: boolean;
-  hasVideo?: boolean;
+  user?:      AgoraUser;
+  isLocal?:   boolean;
+  name?:      string;
+  role?:      'teacher' | 'student';
+  track?:     ILocalVideoTrack | IRemoteVideoTrack | null;
+  hasAudio?:  boolean;
+  hasVideo?:  boolean;
 };
 
-export default function VideoTile({ user, isLocal, name, role, track, hasAudio, hasVideo }: VideoTileProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+const ROLE_COLORS: Record<string, string> = {
+  teacher: 'bg-role-teacher/20 text-role-teacher border-role-teacher/30',
+  student: 'bg-role-student/20 text-role-student border-role-student/30',
+};
 
-  useEffect(() => {
-    if (!containerRef.current || !track) return;
+const AVATAR_GRADIENTS: Record<string, string> = {
+  teacher: 'from-blue-600 to-blue-800',
+  student: 'from-emerald-600 to-emerald-800',
+};
 
-    track.play(containerRef.current);
-
-    return () => {
-      track.stop(); // stop, not close, so it can resume if re-enabled
-    };
-  }, [track]);
+export default function VideoTile({ user, isLocal, name, role = 'student', track, hasAudio, hasVideo }: VideoTileProps) {
+  const videoRef = useRef<HTMLDivElement>(null);
 
   const showVideo = isLocal ? hasVideo : user?.hasVideo;
-  const isMicOn = isLocal ? hasAudio : user?.hasAudio;
+  const isMicOn   = isLocal ? hasAudio : user?.hasAudio;
+  const displayName = name ?? (user?.uid ? String(user.uid) : 'User');
+  const initial     = displayName.charAt(0).toUpperCase();
 
-  const roleColor = role === 'teacher' ? 'bg-role-teacher' : 'bg-role-student';
-  const roleTextColor = role === 'teacher' ? 'text-role-teacher' : 'text-role-student';
+  useEffect(() => {
+    if (!videoRef.current || !track) return;
+    track.play(videoRef.current);
+    return () => { track.stop(); };
+  }, [track]);
 
   return (
-    <div className={`bg-surface-1 rounded-xl border relative overflow-hidden flex flex-col items-center justify-center h-full min-h-[200px] w-full transition-all duration-300 ${isMicOn ? 'border-connected-green ring-1 ring-connected-green/50' : 'border-surface-3'}`}>
-
-      {/* Absolute top left badge */}
-      <div className={`absolute top-3 left-3 px-2 py-0.5 rounded text-xs font-bold tracking-wider capitalize ${roleColor}/20 ${roleTextColor} z-10`}>
-         {role}
-      </div>
-
+    <div className={`relative overflow-hidden rounded-xl bg-surface-1 border transition-all duration-300 flex items-center justify-center min-h-[160px] sm:min-h-[200px] ${
+      isMicOn ? 'border-surface-3 animate-pulse-ring' : 'border-surface-3'
+    }`}>
+      {/* Video container — always rendered so Agora can attach the stream */}
       <div
-        ref={containerRef}
-        className={`w-full h-full object-cover absolute inset-0 z-0 ${showVideo ? 'block' : 'hidden'}`}
-      ></div>
+        ref={videoRef}
+        className={`absolute inset-0 w-full h-full object-cover ${showVideo ? 'block' : 'hidden'}`}
+      />
 
+      {/* Avatar shown when no video */}
       {!showVideo && (
-        <div className={`w-24 h-24 rounded-full flex items-center justify-center text-4xl text-white font-bold bg-gradient-to-br ${role === 'teacher' ? 'from-blue-600 to-blue-800' : 'from-green-600 to-green-800'} shadow-lg z-10`}>
-          {name?.charAt(0).toUpperCase() || user?.uid.charAt(0).toUpperCase() || 'U'}
+        <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-2xl font-bold text-white bg-gradient-to-br ${AVATAR_GRADIENTS[role] ?? AVATAR_GRADIENTS.student}`}>
+          {initial}
         </div>
       )}
 
-      {/* Bottom bar */}
-      <div className="absolute bottom-0 left-0 right-0 h-10 bg-surface-0/60 backdrop-blur-sm flex items-center px-3 justify-between border-t border-surface-3 z-10">
-         <span className="text-white text-sm font-medium truncate pr-2">{name || user?.uid} {isLocal && '(You)'}</span>
-         <span className={`flex items-center justify-center w-6 h-6 rounded-full shrink-0 ${isMicOn ? 'bg-surface-3 text-connected-green' : 'bg-live-red/20 text-live-red'}`}>
-          {isMicOn ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="2" y1="2" x2="22" y2="22"></line><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"></path><path d="M5 10v2a7 7 0 0 0 12 5"></path><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"></path><path d="M9 9v3a3 3 0 0 0 5.12 2.12"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
-          )}
-         </span>
+      {/* Role badge — top left */}
+      <div className="absolute top-2 left-2">
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border uppercase tracking-wide ${ROLE_COLORS[role] ?? ROLE_COLORS.student}`}>
+          {role}
+        </span>
+      </div>
+
+      {/* Name + mic status — bottom bar (frosted glass) */}
+      <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 flex items-center justify-between bg-gradient-to-t from-black/70 to-transparent">
+        <span className="text-white text-xs font-medium truncate">
+          {displayName}
+          {isLocal && <span className="text-white/50 ml-1">(You)</span>}
+        </span>
+        <span className="shrink-0 ml-2">
+          {isMicOn
+            ? <svg className="w-3.5 h-3.5 text-connected-green" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a3 3 0 00-3 3v5a3 3 0 006 0V5a3 3 0 00-3-3zm-5 8a5 5 0 0010 0h-1a4 4 0 01-8 0H5zm5 6a6 6 0 006-6h-1a5 5 0 01-10 0H4a6 6 0 006 6z"/></svg>
+            : <svg className="w-3.5 h-3.5 text-live-red"       fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A5 5 0 0015 10h-1a4 4 0 01-6.568 3.018L6 11.586A3 3 0 0013 10V7.828l2 2V10h1a6 6 0 01-1.285 3.716L16.13 15.13A7.96 7.96 0 0017 10a8 8 0 00-8-8 7.96 7.96 0 00-4.13 1.16L6.284 4.576A3 3 0 0110 2h.001A3 3 0 017 5v.828L5.586 4.414A5 5 0 015 7v3h1V7a4 4 0 011.717-3.283zM7.082 8.496l4.422 4.422A3 3 0 017 10V8.496z" clipRule="evenodd"/></svg>
+          }
+        </span>
       </div>
     </div>
   );

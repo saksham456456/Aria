@@ -1,45 +1,28 @@
-interface ConnectionBannerProps {
-  state: 'idle' | 'joining' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'disconnecting' | 'error' | 'ended';
-}
+'use client';
 
-export default function ConnectionBanner({ state }: ConnectionBannerProps) {
-  if (state === 'connected' || state === 'idle' || state === 'ended' || state === 'disconnecting') return null;
+import { ConnectionState } from '@/types/agora';
 
-  let bgColor = 'bg-warning-amber';
-  let textColor = 'text-amber-900';
-  let message = '';
+const CONFIG: Partial<Record<ConnectionState, { text: string; bg: string; icon: string }>> = {
+  joining:      { text: 'Joining classroom…',                              bg: 'bg-warning-amber/10 border-warning-amber/30 text-warning-amber', icon: '⏳' },
+  connecting:   { text: 'Connecting to media…',                            bg: 'bg-warning-amber/10 border-warning-amber/30 text-warning-amber', icon: '📡' },
+  reconnecting: { text: 'Reconnecting… please wait',                       bg: 'bg-warning-amber/10 border-warning-amber/30 text-warning-amber', icon: '🔄' },
+  disconnected: { text: 'Connection lost. Attempting to reconnect…',       bg: 'bg-live-red/10 border-live-red/30 text-live-red',               icon: '⚠️' },
+  error:        { text: 'Connection failed. Refresh the page to rejoin.',  bg: 'bg-live-red/10 border-live-red/30 text-live-red',               icon: '❌' },
+};
 
-  switch (state) {
-    case 'joining':
-      message = 'Joining classroom...';
-      break;
-    case 'connecting':
-      message = 'Connecting to media...';
-      break;
-    case 'reconnecting':
-      message = 'Reconnecting...';
-      break;
-    case 'disconnected':
-      bgColor = 'bg-live-red';
-      textColor = 'text-white';
-      message = 'Connection lost. Attempting to reconnect...';
-      break;
-    case 'error':
-      bgColor = 'bg-live-red';
-      textColor = 'text-white';
-      message = 'Connection failed. Please refresh the page.';
-      break;
-  }
+export default function ConnectionBanner({ state }: { state: ConnectionState }) {
+  const cfg = CONFIG[state];
+  if (!cfg) return null;
 
   return (
-    <div className={`${bgColor} ${textColor} p-2 text-center text-sm font-medium flex items-center justify-center gap-2 shadow-md z-50 transition-colors`}>
-      {(state === 'connecting' || state === 'reconnecting' || state === 'joining') && (
-        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    <div className={`border-b px-4 py-2 text-xs font-medium text-center flex items-center justify-center gap-2 ${cfg.bg}`}>
+      <span>{cfg.icon}</span>
+      <span>{cfg.text}</span>
+      {state === 'reconnecting' && (
+        <svg className="w-3.5 h-3.5 animate-spin ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
       )}
-      {message}
     </div>
   );
 }
