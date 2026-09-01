@@ -5,17 +5,6 @@ import AgoraRTC, { IAgoraRTCClient } from 'agora-rtc-sdk-ng';
 
 export type AriaVoiceState = 'idle' | 'fetching' | 'speaking' | 'error';
 
-/**
- * Handles ARIA voice output. Audio is published through the existing
- * Agora client — NOT a separate bot client.
- *
- * Pipeline:
- *   ElevenLabs (server) → ArrayBuffer → Web Audio API → MediaStreamDestination
- *   → Agora custom track published on teacher's client → all participants hear it.
- *
- * When ElevenLabs is not configured (TTS route returns 500), falls back to
- * browser SpeechSynthesis. In fallback mode only the local browser hears ARIA.
- */
 export function useAriaVoice(appUserId: string) {
   const [voiceState, setVoiceState] = useState<AriaVoiceState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +29,10 @@ export function useAriaVoice(appUserId: string) {
         body: JSON.stringify({ text }),
       });
 
-      // ElevenLabs not configured — use browser TTS as dev fallback
       if (!response.ok) {
         if (response.status === 500) {
           console.warn(
-            '[ARIA] ElevenLabs not configured. Falling back to browser SpeechSynthesis. ' +
-            'Other participants will NOT hear ARIA in this mode.'
+            '[ARIA] ElevenLabs not configured. Falling back to browser SpeechSynthesis.'
           );
           if (!('speechSynthesis' in window)) {
             throw new Error('Neither ElevenLabs nor browser SpeechSynthesis is available');
@@ -68,19 +55,16 @@ export function useAriaVoice(appUserId: string) {
         throw new Error(errJson?.error?.message ?? `TTS request failed (${response.status})`);
       }
 
-      // Decode the MP3 audio via Web Audio API
       const audioBuffer = await response.arrayBuffer();
-      const audioCtx = new AudioContext();
+      const audioCtx = new window.AudioContext();
       const decoded = await audioCtx.decodeAudioData(audioBuffer);
 
-      // Route to both Agora (remote) and local speaker (teacher hears it too)
       const destination = audioCtx.createMediaStreamDestination();
       const source = audioCtx.createBufferSource();
       source.buffer = decoded;
-      source.connect(destination);           // → Agora → all participants
-      source.connect(audioCtx.destination); // → local speaker
+      source.connect(destination);
+      source.connect(audioCtx.destination);
 
-      // Create a custom Agora audio track from the Web Audio stream
       const ariaTrack = AgoraRTC.createCustomAudioTrack({
         mediaStreamTrack: destination.stream.getAudioTracks()[0],
       });

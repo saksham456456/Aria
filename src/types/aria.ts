@@ -1,32 +1,33 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from 'zod';
 
 export const AriaResponseSchema = z.object({
   shouldSpeak: z.boolean(),
-  urgency: z.number().int().min(0).max(10),
-  target: z.enum(['class', 'teacher']).or(z.string()),
-  language: z.enum(['en', 'hi', 'en+hi']),
-  responseType: z.enum(['explanation', 'quiz', 'summary', 'feedback', 'observation']),
-  response: z.string().max(500),      // what ARIA will say aloud
-  reason: z.string().max(300),        // internal reasoning (not spoken)
-  learningGaps: z.array(z.object({
+  urgency: z.number().min(0).max(10).optional(),
+  target: z.enum(['class', 'student', 'teacher']).optional(),
+  targetStudentName: z.string().optional(),
+  language: z.string().default('en').optional(),
+  responseType: z.enum(['explanation', 'quiz_question', 'clarification', 'encouragement', 'silent_note', 'observation']).optional(),
+  response: z.string().optional(),
+  reason: z.string().optional(),
+  detectedGaps: z.array(z.object({
     concept: z.string(),
-    affectedStudentIds: z.array(z.string()),
-    confidence: z.number().min(0).max(1),
-    evidence: z.string(),
-  })).optional(),
+    description: z.string(),
+    confidence: z.number().min(0).max(1)
+  })).optional()
 });
 
-export type AriaResponse = z.infer<typeof AriaResponseSchema>;
+export type AriaLLMResponse = z.infer<typeof AriaResponseSchema>;
 
 export interface ClassroomContext {
   lesson: { subject: string; topic: string; grade: string; description: string };
-  participants: any[];
-  recentTranscript: any[];
-  recentMessages: any[];
-  knownLearningGaps: any[];
-  recentAriaEvents: any[];
-  ariaMode: 'auto' | 'manual' | 'silent';
+  participants: Record<string, unknown>[];
+  recentTranscript: Record<string, unknown>[];
+  recentMessages: Record<string, unknown>[];
+  knownLearningGaps: Record<string, unknown>[];
+  recentAriaEvents: Record<string, unknown>[];
+  ariaMode: 'auto' | 'manual' | 'silent' | 'collaborative' | 'active_quiz' | 'silent_observer' | 'paused';
   isTeacherSpeaking: boolean;
   teacherCommand?: string;
 }
+
+export type AriaResponse = AriaLLMResponse;
