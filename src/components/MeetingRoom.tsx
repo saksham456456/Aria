@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useAgoraMeeting } from '@/hooks/useAgoraMeeting';
 import { useMeetingSync } from '@/hooks/useMeetingSync';
 import { useAriaEngine } from '@/hooks/useAriaEngine';
+import { useSpeech } from '@/hooks/useSpeech';
 import { VideoGrid } from './VideoGrid';
 import { ChatPanel } from './ChatPanel';
 import { ParticipantsPanel } from './ParticipantsPanel';
@@ -59,6 +60,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     role === 'teacher',
     agoraClient
   );
+
+  useSpeech(sessionId, userName, role, isMuted);
 
   return (
     <div className="flex h-screen w-screen bg-surface-0 text-gray-100 overflow-hidden font-sans">
