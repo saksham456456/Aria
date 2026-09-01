@@ -22,6 +22,7 @@ import ParticipantsPanel from '../participants/ParticipantsPanel';
 import AriaTile from '../aria/AriaTile';
 import AriaPanel from '../aria/AriaPanel';
 
+
 export default function MeetingRoom({ sessionId }: { sessionId: string }) {
   const [appUserId, setAppUserId] = useState<string | null>(null);
 
@@ -37,6 +38,21 @@ export default function MeetingRoom({ sessionId }: { sessionId: string }) {
   if (!appUserId) {
     return (
       <div className="h-screen bg-surface-0 flex items-center justify-center">
+        <div className="text-slate-400 text-sm">Loading Identity…</div>
+      </div>
+    );
+  }
+
+  return <MeetingRoomParticipantLoader sessionId={sessionId} appUserId={appUserId} />;
+}
+
+function MeetingRoomParticipantLoader({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
+  const { participants } = useParticipants(sessionId, appUserId);
+  const localParticipant = useMemo(() => participants.find(p => p.app_user_id === appUserId), [participants, appUserId]);
+
+  if (!localParticipant) {
+    return (
+      <div className="h-screen bg-surface-0 flex items-center justify-center">
         <div className="text-slate-400 text-sm">Loading Classroom…</div>
       </div>
     );
@@ -47,6 +63,7 @@ export default function MeetingRoom({ sessionId }: { sessionId: string }) {
 
 function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
   const { participants } = useParticipants(sessionId, appUserId);
+
   const router = useRouter();
 
   const { session } = useSession(sessionId, appUserId);
