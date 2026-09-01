@@ -13,9 +13,11 @@ export function useSpeechRecognition(
   onSpeakingChange?: (speaking: boolean) => void,
 ) {
   const recognitionRef  = useRef<SpeechRecognition | null>(null);
-  // Ref mirrors state so onend callback never reads a stale closure value
   const isMicEnabledRef = useRef(isMicEnabled);
+  const onSpeakingChangeRef = useRef(onSpeakingChange);
+
   useEffect(() => { isMicEnabledRef.current = isMicEnabled; }, [isMicEnabled]);
+  useEffect(() => { onSpeakingChangeRef.current = onSpeakingChange; }, [onSpeakingChange]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -27,26 +29,29 @@ export function useSpeechRecognition(
     }
 
     if (!isMicEnabled || !participantId) {
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
+      if (recognitionRef.current) {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
       return;
     }
 
-    if (recognitionRef.current) return; // already running
+    if (recognitionRef.current) return;
 
     const recognition = new Ctor();
     recognition.continuous     = true;
     recognition.interimResults = false;
     recognition.lang           = 'en-US';
 
-    recognition.onstart = () => { onSpeakingChange?.(true); };
+    recognition.onstart = () => { onSpeakingChangeRef.current?.(true); };
 
     recognition.onresult = async (event: SpeechRecognitionEvent) => {
       const result = event.results[event.results.length - 1];
       if (!result.isFinal) return;
       const text = result[0].transcript.trim();
       if (!text) return;
-      onSpeakingChange?.(true);
+      onSpeakingChangeRef.current?.(true);
       const supabase = getSupabaseBrowser(appUserId);
       await supabase.from('transcript_segments').insert({
         session_id:     sessionId,
@@ -63,12 +68,11 @@ export function useSpeechRecognition(
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
         console.warn('[useSpeechRecognition] error:', event.error);
       }
-      onSpeakingChange?.(false);
+      onSpeakingChangeRef.current?.(false);
     };
 
-    // Use ref (not closure variable) so restart always sees the live value
     recognition.onend = () => {
-      onSpeakingChange?.(false);
+      onSpeakingChangeRef.current?.(false);
       if (isMicEnabledRef.current && recognitionRef.current) {
         try { recognition.start(); } catch { /* already starting */ }
       }
@@ -82,9 +86,14 @@ export function useSpeechRecognition(
     }
 
     return () => {
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
-      onSpeakingChange?.(false);
+      if (recognitionRef.current) {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      onSpeakingChangeRef.current?.(false);
     };
-  }, [isMicEnabled, participantId, sessionId, role, name, appUserId, onSpeakingChange]);
+  // Exclude onSpeakingChange from deps to avoid re-renders restarting the stream.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMicEnabled, participantId, sessionId, role, name, appUserId]);
 }

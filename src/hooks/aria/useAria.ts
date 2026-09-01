@@ -17,8 +17,8 @@ interface UseAriaOptions {
   isTeacherSpeaking: boolean;
 }
 
-const EVAL_COOLDOWN_MS = 15_000;   // minimum gap between auto-evaluations
-const EVAL_INTERVAL_MS = 20_000;   // periodic auto-evaluation interval
+const EVAL_COOLDOWN_MS = 15_000;
+const EVAL_INTERVAL_MS = 20_000;
 
 export function useAria({
   sessionId,
@@ -39,30 +39,24 @@ export function useAria({
   const ariaModeRef     = useRef<AriaMode>('auto');
   const ariaPausedRef   = useRef(false);
 
-  useEffect(() => { ariaModeRef.current   = ariaMode;   }, [ariaMode]);
+  useEffect(() => { ariaModeRef.current = ariaMode; }, [ariaMode]);
   useEffect(() => { ariaPausedRef.current = ariaPaused; }, [ariaPaused]);
 
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null);
 
-  // Unified broadcast channel for ARIA state
   useEffect(() => {
     const supabase = getSupabaseBrowser(appUserId);
     const channel = supabase.channel(`aria_state:${sessionId}`);
 
     if (role !== 'teacher') {
-      channel.on(
-        'broadcast',
-        { event: 'state_change' },
-        (payload) => {
-          setAriaState(payload.payload.state as AriaState);
-        }
-      );
+      channel.on('broadcast', { event: 'state_change' }, (payload) => {
+        setAriaState(payload.payload.state as AriaState);
+      });
     }
 
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED' && role === 'teacher') {
         broadcastChannelRef.current = channel;
-        // Broadcast current state upon connection
         channel.send({
           type: 'broadcast',
           event: 'state_change',
@@ -88,9 +82,6 @@ export function useAria({
     }
   }, [role]);
 
-
-
-  // Sync voice state to ariaState and broadcast it
   useEffect(() => {
     let newState: AriaState = 'listening';
     if (voiceState === 'speaking') newState = 'speaking';
@@ -101,7 +92,6 @@ export function useAria({
     broadcastState(newState);
   }, [voiceState, role, sessionId, appUserId, broadcastState]);
 
-
   const evaluateAndSpeak = useCallback(async (teacherCommand?: string) => {
     if (!agoraClient) return;
     if (ariaPausedRef.current && !teacherCommand) return;
@@ -111,8 +101,10 @@ export function useAria({
     if (!teacherCommand && now - lastEvalRef.current < EVAL_COOLDOWN_MS) return;
     lastEvalRef.current = now;
 
-    if (!teacherCommand) setAriaState('thinking');
-        broadcastState('thinking');
+    if (!teacherCommand) {
+      setAriaState('thinking');
+      broadcastState('thinking');
+    }
 
     try {
       const supabase = getSupabaseBrowser(appUserId);
@@ -133,7 +125,6 @@ export function useAria({
       if (!res.ok) {
         setAriaState('listening');
         broadcastState('listening');
-
         return;
       }
 
@@ -141,7 +132,6 @@ export function useAria({
       if (!json.success) {
         setAriaState('listening');
         broadcastState('listening');
-
         return;
       }
 
@@ -152,23 +142,20 @@ export function useAria({
         broadcastState('thinking');
         await speak(decision.response, agoraClient);
 
-        // Persist ARIA message to chat so all participants see it as text
         await supabase.from('messages').insert({
-          session_id:   sessionId,
-          role:         'aria',
-          sender_name:  'ARIA',
-          text:         decision.response,
+          session_id: sessionId,
+          role: 'aria',
+          sender_name: 'ARIA',
+          text: decision.response,
         });
       } else {
         setAriaState('listening');
         broadcastState('listening');
-
       }
     } catch (err) {
       console.error('[ARIA] evaluation error', err);
       setAriaState('listening');
-        broadcastState('listening');
-
+      broadcastState('listening');
     }
   }, [agoraClient, voiceState, isTeacherSpeaking, sessionId, appUserId, speak, broadcastState]);
 
@@ -177,7 +164,6 @@ export function useAria({
     evaluateAndSpeak(command);
   }, [evaluateAndSpeak]);
 
-  // Periodic auto-evaluation — teacher only, auto mode
   useEffect(() => {
     if (role !== 'teacher') return;
     if (ariaMode === 'silent') return;
@@ -191,7 +177,6 @@ export function useAria({
     };
   }, [role, ariaMode, evaluateAndSpeak]);
 
-  // Trigger evaluation when new transcript segments arrive — teacher only
   useEffect(() => {
     if (role !== 'teacher') return;
 
@@ -217,8 +202,7 @@ export function useAria({
     return () => { supabase.removeChannel(channel); };
   }, [sessionId, appUserId, role, evaluateAndSpeak]);
 
-  // Update state when manually pausing/resuming and broadcast
-const pauseAria = useCallback(() => {
+  const pauseAria = useCallback(() => {
     setAriaPaused(true);
     setAriaState('paused');
     broadcastState('paused');

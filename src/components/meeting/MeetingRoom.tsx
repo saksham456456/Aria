@@ -1,19 +1,20 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAgoraMeeting } from '@/hooks/meeting/useAgoraMeeting';
-import { useAria } from '@/hooks/aria/useAria';
-import { useSession } from '@/hooks/classroom/useSession';
-import { useParticipants } from '@/hooks/classroom/useParticipants';
-import { useChat } from '@/hooks/classroom/useChat';
-import { useSpeechRecognition } from '@/hooks/speech/useSpeechRecognition';
-import { getSupabaseBrowser, supabaseBrowser } from '@/services/supabase/client';
+import { getSupabaseBrowser } from '@/services/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
-import MeetingHeader from './MeetingHeader';
+import { useParticipants } from '@/hooks/classroom/useParticipants';
+import { useSession } from '@/hooks/classroom/useSession';
+import { useChat } from '@/hooks/classroom/useChat';
+import { useAgoraMeeting } from '@/hooks/meeting/useAgoraMeeting';
+import { useAria } from '@/hooks/aria/useAria';
+import { useSpeechRecognition } from '@/hooks/speech/useSpeechRecognition';
+
 import VideoGrid from './VideoGrid';
 import VideoTile from './VideoTile';
+import MeetingHeader from './MeetingHeader';
 import MeetingControls from './MeetingControls';
 import ConnectionBanner from './ConnectionBanner';
 import EndMeetingDialog from './EndMeetingDialog';
@@ -21,7 +22,6 @@ import ChatPanel from '../chat/ChatPanel';
 import ParticipantsPanel from '../participants/ParticipantsPanel';
 import AriaTile from '../aria/AriaTile';
 import AriaPanel from '../aria/AriaPanel';
-
 
 export default function MeetingRoom({ sessionId }: { sessionId: string }) {
   const [appUserId, setAppUserId] = useState<string | null>(null);
@@ -63,7 +63,6 @@ function MeetingRoomParticipantLoader({ sessionId, appUserId }: { sessionId: str
 
 function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
   const { participants } = useParticipants(sessionId, appUserId);
-
   const router = useRouter();
 
   const { session } = useSession(sessionId, appUserId);
@@ -102,10 +101,10 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     sessionId,
     appUserId,
     role: (localParticipant?.role as 'teacher' | 'student') ?? 'student',
-    // Only the teacher's browser hosts ARIA — students receive voice via Agora
     agoraClient: isTeacher ? agoraClient : null,
     isTeacherSpeaking,
   });
+
   const handleSpeakingChange = useCallback((speaking: boolean) => {
     setIsTeacherSpeaking(speaking);
   }, []);
@@ -119,21 +118,16 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     isMicEnabledRef.current = isMicEnabled;
   }, [toggleMic, isMicEnabled]);
 
-  // Unified room commands channel
   useEffect(() => {
     const supabase = getSupabaseBrowser(appUserId);
     const channel = supabase.channel(`room_commands:${sessionId}`);
 
     if (!isTeacher) {
-      channel.on(
-        'broadcast',
-        { event: 'mute_all' },
-        async () => {
-          if (isMicEnabledRef.current) {
-             await toggleMicRef.current();
-          }
+      channel.on('broadcast', { event: 'mute_all' }, async () => {
+        if (isMicEnabledRef.current) {
+          await toggleMicRef.current();
         }
-      );
+      });
     }
 
     channel.subscribe((status) => {
@@ -156,8 +150,6 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     }).catch(() => {});
   }, [isTeacher]);
 
-
-
   useSpeechRecognition(
     sessionId,
     localParticipant?.id,
@@ -168,7 +160,6 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     isTeacher ? handleSpeakingChange : undefined
   );
 
-  // Redirect when session ends (e.g., teacher ended it from another client)
   useEffect(() => {
     if (session?.status === 'ended' || session?.status === 'ending') {
       router.push(`/summary/${sessionId}`);
@@ -182,21 +173,20 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     } catch (e) {
       console.error('[MeetingRoom] Agora leave error', e);
     }
+    const supabase = getSupabaseBrowser(appUserId);
     if (localParticipant) {
-      const supabase = getSupabaseBrowser(appUserId);
       await supabase
         .from('participants')
         .update({ left_at: new Date().toISOString() })
         .eq('id', localParticipant.id);
     }
-    supabaseBrowser.removeAllChannels();
+    supabase.removeAllChannels();
     router.push(isTeacher ? `/summary/${sessionId}` : '/');
   }, [pauseAria, leave, localParticipant, appUserId, isTeacher, sessionId, router]);
 
   const handleEndClass = useCallback(async () => {
     setShowEndDialog(false);
     pauseAria();
-    // Mark session as ending — all clients redirect via Realtime
     const supabase = getSupabaseBrowser(appUserId);
     await supabase.from('sessions').update({ status: 'ending' }).eq('id', sessionId);
     await handleLeave();
@@ -214,7 +204,6 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     <div className="flex flex-col h-screen bg-surface-0 text-white overflow-hidden">
       <ConnectionBanner state={connectionState} />
 
-      {/* Error banners */}
       {(agoraError || voiceError) && (
         <div className="bg-live-red/10 border-b border-live-red/30 text-live-red px-4 py-2 text-xs font-medium">
           {agoraError || voiceError}
@@ -233,10 +222,8 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Main content */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
           <VideoGrid>
-            {/* Local user */}
             <VideoTile
               isLocal
               name={localParticipant?.name ?? 'You'}
@@ -246,10 +233,8 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
               hasVideo={isCameraEnabled}
             />
 
-            {/* ARIA tile */}
             <AriaTile state={ariaState} />
 
-            {/* Remote users */}
             {Object.values(remoteUsers).map(user => {
               const p = participants.find(part => part.app_user_id === String(user.uid));
               return (
@@ -264,7 +249,6 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             })}
           </VideoGrid>
 
-          {/* Meeting Controls are now absolutely positioned inside the flex container */}
           <MeetingControls
             isMicEnabled={isMicEnabled}
             isCameraEnabled={isCameraEnabled}
@@ -282,7 +266,6 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
           />
         </div>
 
-        {/* Side panels — INSIDE the flex container so layout doesn't break */}
         {activePanel === 'chat' && (
           <ChatPanel
             messages={messages}
