@@ -35,7 +35,7 @@ export function useParticipants(sessionId: string, appUserId: string) {
           if (!isMounted) return;
           const p = payload.new as Participant;
           if (payload.eventType === 'INSERT') {
-            setParticipants(prev => [...prev, p]);
+            setParticipants(prev => prev.some(x => x.id === p.id) ? prev : [...prev, p]);
           } else if (payload.eventType === 'UPDATE') {
             if (p.left_at) {
               setParticipants(prev => prev.filter(x => x.id !== p.id));

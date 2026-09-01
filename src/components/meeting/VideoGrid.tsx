@@ -11,8 +11,8 @@ export default function VideoGrid({ children }: { children: ReactNode }) {
   else if (count > 9) gridCols = 'sm:grid-cols-4';
 
   return (
-    <div className="flex-1 overflow-hidden p-4 flex items-center justify-center bg-black/10">
-      <div className={`w-full max-w-7xl mx-auto h-full grid ${gridCols} gap-4 auto-rows-fr content-center`}>
+    <div className="flex-1 overflow-hidden p-4 flex items-center justify-center bg-black/10 pb-28">
+      <div className={`w-full max-w-7xl mx-auto h-full grid ${gridCols} gap-4 auto-rows-fr content-center ${count === 1 ? 'max-w-3xl max-h-[70vh]' : ''}`}>
         {children}
       </div>
     </div>

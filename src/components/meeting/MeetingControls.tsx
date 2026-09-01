@@ -33,7 +33,7 @@ function CtrlBtn({ onClick, label, icon, active, danger, highlight, title }: Ctr
     <button
       onClick={onClick}
       title={title ?? label}
-      className={`relative flex items-center justify-center w-12 h-12 rounded-full transition-all duration-200 select-none ${
+      className={`group relative flex flex-col items-center justify-center w-14 h-14 rounded-2xl transition-all duration-200 select-none ${
         danger
           ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
           : active
@@ -41,7 +41,8 @@ function CtrlBtn({ onClick, label, icon, active, danger, highlight, title }: Ctr
           : 'bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white'
       }`}
     >
-      {icon}
+      <span className="mb-0.5">{icon}</span>
+      <span className="text-[9px] font-semibold tracking-wider opacity-80 group-hover:opacity-100 uppercase">{label}</span>
       {highlight && (
         <span className="absolute 0 text-[9px] font-bold bg-aria-purple text-white rounded px-1 leading-none py-0.5">
           {highlight}
