@@ -143,6 +143,7 @@ CREATE TABLE session_summaries (
 ALTER PUBLICATION supabase_realtime ADD TABLE sessions;
 ALTER PUBLICATION supabase_realtime ADD TABLE participants;
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE transcript_segments;
 ALTER PUBLICATION supabase_realtime ADD TABLE aria_events;
 ALTER PUBLICATION supabase_realtime ADD TABLE learning_gaps;
 

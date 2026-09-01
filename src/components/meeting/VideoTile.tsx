@@ -27,8 +27,8 @@ const AVATAR_GRADIENTS: Record<string, string> = {
 export default function VideoTile({ user, isLocal, name, role = 'student', track, hasAudio, hasVideo }: VideoTileProps) {
   const videoRef = useRef<HTMLDivElement>(null);
 
-  const showVideo = isLocal ? hasVideo : user?.hasVideo;
-  const isMicOn   = isLocal ? hasAudio : user?.hasAudio;
+  const showVideo = isLocal ? hasVideo : (user ? user.hasVideo : false);
+  const isMicOn   = isLocal ? hasAudio : (user ? user.hasAudio : false);
   const displayName = name ?? (user?.uid ? String(user.uid) : 'User');
   const initial     = displayName.charAt(0).toUpperCase();
 
@@ -39,8 +39,8 @@ export default function VideoTile({ user, isLocal, name, role = 'student', track
   }, [track]);
 
   return (
-    <div className={`relative overflow-hidden rounded-xl bg-surface-1 border transition-all duration-300 flex items-center justify-center min-h-[160px] sm:min-h-[200px] ${
-      isMicOn ? 'border-surface-3 animate-pulse-ring' : 'border-surface-3'
+    <div className={`relative overflow-hidden rounded-2xl bg-surface-1 shadow-lg transition-all duration-300 flex items-center justify-center h-full w-full ${
+      isMicOn ? 'ring-2 ring-connected-green shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'border border-surface-3'
     }`}>
       {/* Video container — always rendered so Agora can attach the stream */}
       <div
@@ -63,7 +63,7 @@ export default function VideoTile({ user, isLocal, name, role = 'student', track
       </div>
 
       {/* Name + mic status — bottom bar (frosted glass) */}
-      <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 flex items-center justify-between bg-gradient-to-t from-black/70 to-transparent">
+      <div className="absolute bottom-3 left-3 right-3 px-3 py-2 flex items-center justify-between bg-black/40 backdrop-blur-md rounded-xl border border-white/10 shadow-sm">
         <span className="text-white text-xs font-medium truncate">
           {displayName}
           {isLocal && <span className="text-white/50 ml-1">(You)</span>}

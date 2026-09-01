@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabaseBrowser } from '@/services/supabase/client';
+import { getSupabaseBrowser } from '@/services/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Message } from '@/types/session';
 
-export function useChat(sessionId: string) {
+export function useChat(sessionId: string, appUserId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
@@ -11,7 +11,8 @@ export function useChat(sessionId: string) {
     let isMounted = true;
 
     async function fetchMessages() {
-      const { data } = await supabaseBrowser
+      const supabase = getSupabaseBrowser(appUserId);
+      const { data } = await supabase
         .from('messages')
         .select('*')
         .eq('session_id', sessionId)
@@ -25,7 +26,8 @@ export function useChat(sessionId: string) {
 
     if (channelRef.current) return;
 
-    const channel = supabaseBrowser
+    const supabase = getSupabaseBrowser(appUserId);
+    const channel = supabase
       .channel(`chat:${sessionId}`)
       .on(
         'postgres_changes',
@@ -40,10 +42,11 @@ export function useChat(sessionId: string) {
 
     return () => {
       isMounted = false;
-      supabaseBrowser.removeChannel(channel);
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, appUserId]);
 
   const sendMessage = useCallback(async (
     participantId: string,
@@ -51,7 +54,8 @@ export function useChat(sessionId: string) {
     senderName: string,
     text: string
   ) => {
-    const { error } = await supabaseBrowser.from('messages').insert({
+    const supabase = getSupabaseBrowser(appUserId);
+    const { error } = await supabase.from('messages').insert({
       session_id:     sessionId,
       participant_id: participantId,
       role,
@@ -59,7 +63,7 @@ export function useChat(sessionId: string) {
       text,
     });
     if (error) console.error('[useChat] sendMessage failed', error);
-  }, [sessionId]);
+  }, [sessionId, appUserId]);
 
   return { messages, sendMessage };
 }

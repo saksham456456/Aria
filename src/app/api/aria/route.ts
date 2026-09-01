@@ -1,83 +1,60 @@
-export const dynamic = 'force-dynamic';
+import { NextRequest, NextResponse } from 'next/server';
+import Groq from 'groq-sdk';
+import { AriaResponseSchema } from '@/types/aria';
 
-import { z } from 'zod';
-import { supabaseServer } from '@/services/supabase/server';
-import { buildClassroomContext } from '@/services/aria/contextBuilder';
-import { evaluateContext } from '@/services/aria/ariaEngine';
-import { successResponse, errorResponse } from '@/lib/api';
+let groq: Groq | null = null;
+function getGroq() { if (!groq) groq = new Groq({ apiKey: process.env.GROQ_API_KEY || 'dummy' }); return groq; }
 
-const AriaRequestSchema = z.object({
-  sessionId:        z.string().uuid('Invalid session ID'),
-  ariaMode:         z.enum(['auto', 'manual', 'silent']),
-  isTeacherSpeaking: z.boolean(),
-  teacherCommand:   z.string().optional(),
-});
-
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    // Section 17.1 — authorization check
-    const appUserId = request.headers.get('x-user-id');
-    if (!appUserId) return errorResponse('unauthorized', 'Missing x-user-id header', 401);
+    const {
+      lessonContext,
+      recentTranscripts,
+      participants,
+      ariaMode = 'collaborative',
+      teacherMutedAI = false
+    } = await req.json();
 
-    const body = await request.json();
-    const data = AriaRequestSchema.parse(body);
-
-    // Verify the caller is the teacher for this session
-    const { data: participant, error: pErr } = await supabaseServer
-      .from('participants')
-      .select('role')
-      .eq('session_id', data.sessionId)
-      .eq('app_user_id', appUserId)
-      .single();
-
-    if (pErr || !participant) {
-      return errorResponse('forbidden', 'Not a participant in this session', 403);
-    }
-    if (participant.role !== 'teacher') {
-      return errorResponse('forbidden', 'Only the teacher can trigger ARIA evaluation', 403);
+    if (teacherMutedAI || ariaMode === 'silent_observer' || ariaMode === 'paused') {
+      return NextResponse.json({ shouldSpeak: false, reason: 'AI disabled or in silent mode' });
     }
 
-    const context = await buildClassroomContext(
-      data.sessionId,
-      data.ariaMode,
-      data.isTeacherSpeaking,
-      data.teacherCommand
-    );
+    const systemPrompt = `
+You are ARIA, an intelligent, empathetic voice AI co-teacher in a live classroom.
+Subject: ${lessonContext?.subject || 'General'}
+Topic: ${lessonContext?.topic || 'General'}
+Grade: ${lessonContext?.grade || 'Standard'}
+Description: ${lessonContext?.lesson_description || 'General Lesson'}
 
-    if (!context) return errorResponse('not_found', 'Session not found', 404);
+Current Mode: ${ariaMode}
+Active Participants: ${JSON.stringify(participants || [])}
 
-    const ariaDecision = await evaluateContext(context);
+Turn-taking Rules:
+1. NEVER talk over the teacher. Only intervene if the teacher has finished a point, asked for assistance, or if students are visibly confused.
+2. If a student is confused about a concept, provide a gentle, step-by-step intuition without shaming them.
+3. Code-switch smoothly if students speak Hinglish or regional phrases.
+4. Output valid JSON adhering strictly to the required schema.
+`;
 
-    if (ariaDecision.learningGaps && ariaDecision.learningGaps.length > 0) {
-      for (const gap of ariaDecision.learningGaps) {
-        await supabaseServer.from('learning_gaps').upsert({
-          session_id:           data.sessionId,
-          concept:              gap.concept,
-          description:          gap.evidence,
-          affected_student_ids: gap.affectedStudentIds,
-          confidence:           gap.confidence,
-          evidence:             gap.evidence,
-        }, { onConflict: 'session_id,concept' });
-      }
-    }
+    // Ensure recentTranscripts is an array
+    const transcriptText = (recentTranscripts || []).map((t: { speaker_name: string; speaker_role: string; text: string }) => `${t.speaker_name} (${t.speaker_role}): ${t.text}`).join('\n');
 
-    if (ariaDecision.shouldSpeak || ariaDecision.responseType === 'observation') {
-      await supabaseServer.from('aria_events').insert({
-        session_id:    data.sessionId,
-        event_type:    ariaDecision.responseType,
-        response_text: ariaDecision.response,
-        urgency:       ariaDecision.urgency,
-        target:        ariaDecision.target,
-        language:      ariaDecision.language,
-      });
-    }
+    const response = await getGroq().chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: `Recent Classroom Conversation:\n${transcriptText}\n\nEvaluate if you should speak now. Respond in JSON.`
+        }
+      ],
+      temperature: 0.3
+    });
 
-    return successResponse(ariaDecision);
-
-  } catch (err: unknown) {
-    if (err instanceof z.ZodError) {
-      return errorResponse('validation_error', err.message);
-    }
-    return errorResponse('internal_error', err instanceof Error ? err.message : 'Unknown error', 500);
+    const parsed = AriaResponseSchema.parse(JSON.parse(response.choices[0].message.content || '{}'));
+    return NextResponse.json(parsed);
+  } catch (error: unknown) {
+    return NextResponse.json({ shouldSpeak: false, error: (error as Error).message }, { status: 500 });
   }
 }

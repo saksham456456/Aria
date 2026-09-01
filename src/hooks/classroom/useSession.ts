@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabaseBrowser } from '@/services/supabase/client';
+import { getSupabaseBrowser } from '@/services/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Session } from '@/types/session';
 
-export function useSession(sessionId: string) {
+export function useSession(sessionId: string, appUserId: string) {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -12,8 +12,9 @@ export function useSession(sessionId: string) {
     let isMounted = true;
 
     async function fetchSession() {
+      const supabase = getSupabaseBrowser(appUserId);
       // Join classrooms so MeetingHeader can display the class name and topic
-      const { data, error: fetchError } = await supabaseBrowser
+      const { data, error: fetchError } = await supabase
         .from('sessions')
         .select('*, classrooms(name, subject, topic, grade, lesson_description, join_code)')
         .eq('id', sessionId)
@@ -27,7 +28,8 @@ export function useSession(sessionId: string) {
 
     if (channelRef.current) return;
 
-    const channel = supabaseBrowser
+    const supabase = getSupabaseBrowser(appUserId);
+    const channel = supabase
       .channel(`session_updates:${sessionId}`)
       .on(
         'postgres_changes',
@@ -45,10 +47,11 @@ export function useSession(sessionId: string) {
 
     return () => {
       isMounted = false;
-      supabaseBrowser.removeChannel(channel);
+      const supabase = getSupabaseBrowser(appUserId);
+      supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, appUserId]);
 
   return { session, error };
 }

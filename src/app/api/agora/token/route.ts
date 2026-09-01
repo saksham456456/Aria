@@ -1,68 +1,34 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export const dynamic = 'force-dynamic';
-
-
+import { NextRequest, NextResponse } from 'next/server';
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
-import { supabaseServer } from '@/services/supabase/server';
-import { serverEnv } from '@/lib/env';
-import { errorResponse, successResponse } from '@/lib/api';
-import { z } from 'zod';
 
-const TokenRequestSchema = z.object({
-  sessionId: z.string().uuid(),
-});
-
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const appUserId = request.headers.get('x-user-id');
-    if (!appUserId) {
-      return errorResponse('unauthorized', 'Missing x-user-id header', 401);
-    }
-
-    const body = await request.json();
-    const data = TokenRequestSchema.parse(body);
-
-    // Validate session and participant
-    const { data: participant, error: pErr } = await supabaseServer
-      .from('participants')
-      .select('id, role')
-      .eq('session_id', data.sessionId)
-      .eq('app_user_id', appUserId)
-      .single();
-
-    if (pErr || !participant) {
-      return errorResponse('forbidden', 'Not a participant in this session', 403);
-    }
+    const { channelName, uid, role = 'publisher' } = await req.json();
 
     const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
-    const appCertificate = serverEnv.AGORA_APP_CERTIFICATE;
+    const appCertificate = process.env.AGORA_APP_CERTIFICATE;
 
     if (!appId || !appCertificate) {
-       return errorResponse('internal_error', 'Agora credentials not configured', 500);
+      return NextResponse.json({ error: 'Agora credentials missing' }, { status: 500 });
     }
 
-    const role = RtcRole.PUBLISHER; // Everyone publishes
-    const expirationTimeInSeconds = 3600;
+    const rtcRole = role === 'publisher' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+    const expirationTimeInSeconds = 3600 * 24; // 24 hours
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
 
-    // Use appUserId as string UID for Agora
-    const token = RtcTokenBuilder.buildTokenWithUserAccount(
+    const token = RtcTokenBuilder.buildTokenWithUid(
       appId,
       appCertificate,
-      data.sessionId,
-      appUserId,
-      role,
+      channelName,
+      uid,
+      rtcRole,
       privilegeExpiredTs,
       privilegeExpiredTs
     );
 
-    return successResponse({ token });
-
-  } catch (err: unknown) {
-    if (err instanceof z.ZodError) {
-      return errorResponse('validation_error', ((err as unknown) as any).errors.map((e: any) => e.message).join(', '));
-    }
-    return errorResponse('internal_error', err instanceof Error ? err.message : String(err), 500);
+    return NextResponse.json({ token, uid, channelName });
+  } catch {
+    return NextResponse.json({ error: 'Failed to generate Agora token' }, { status: 500 });
   }
 }
