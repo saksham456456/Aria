@@ -8,6 +8,7 @@ export interface Classroom {
   join_code: string;
   teacher_app_user_id: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Session {
@@ -53,4 +54,38 @@ export interface TranscriptSegment {
   start_time: string | null;
   end_time: string | null;
   created_at: string;
+}
+
+export interface LearningGap {
+  id: string;
+  session_id: string;
+  concept: string;
+  description: string;
+  affected_student_ids: string[];
+  confidence: number | null;
+  evidence: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  session_id: string;
+  overview: string | null;
+  topics_covered: string[];
+  common_learning_gaps: Array<{
+    concept: string;
+    description: string;
+    affectedStudents: string[];
+    recommendation: string;
+  }>;
+  student_insights: Array<{
+    studentName: string;
+    strengths: string[];
+    needsSupport: string[];
+  }>;
+  aria_interventions_count: number;
+  recommendations: string | null;
+  generated_at: string;
+  updated_at: string;
 }

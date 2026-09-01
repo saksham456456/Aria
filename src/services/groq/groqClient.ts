@@ -1,14 +1,12 @@
 import Groq from 'groq-sdk';
-import { serverEnv } from '@/lib/env';
+import { getServerEnv } from '@/lib/env';
 
 let groqInstance: Groq | null = null;
 
-export const getGroqClient = () => {
+/** Returns the shared Groq client. Created lazily on first request. */
+export const getGroqClient = (): Groq => {
   if (!groqInstance) {
-    if (!serverEnv.GROQ_API_KEY) {
-      throw new Error("GROQ_API_KEY is missing");
-    }
-    groqInstance = new Groq({ apiKey: serverEnv.GROQ_API_KEY });
+    groqInstance = new Groq({ apiKey: getServerEnv().GROQ_API_KEY });
   }
   return groqInstance;
 };

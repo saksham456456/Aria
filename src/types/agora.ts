@@ -1,4 +1,4 @@
-import { IRemoteAudioTrack, IRemoteVideoTrack } from "agora-rtc-sdk-ng";
+import { IRemoteAudioTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
 
 export interface AgoraUser {
   uid: string;
@@ -8,4 +8,13 @@ export interface AgoraUser {
   hasVideo: boolean;
 }
 
-export type ConnectionState = 'idle' | 'joining' | 'connecting' | 'connected' | 'reconnecting' | 'disconnecting' | 'ended' | 'error';
+export type ConnectionState =
+  | 'idle'
+  | 'joining'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'disconnecting'
+  | 'disconnected'
+  | 'ended'
+  | 'error';

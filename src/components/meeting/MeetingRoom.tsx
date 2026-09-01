@@ -1,13 +1,14 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAgoraMeeting } from '@/hooks/meeting/useAgoraMeeting';
+import { useAria } from '@/hooks/aria/useAria';
 import { useSession } from '@/hooks/classroom/useSession';
 import { useParticipants } from '@/hooks/classroom/useParticipants';
 import { useChat } from '@/hooks/classroom/useChat';
 import { useSpeechRecognition } from '@/hooks/speech/useSpeechRecognition';
-import { supabaseBrowser } from '@/services/supabase/client';
+import { getSupabaseBrowser, supabaseBrowser } from '@/services/supabase/client';
 
 import MeetingHeader from './MeetingHeader';
 import VideoGrid from './VideoGrid';
@@ -19,7 +20,6 @@ import ChatPanel from '../chat/ChatPanel';
 import ParticipantsPanel from '../participants/ParticipantsPanel';
 import AriaTile from '../aria/AriaTile';
 import AriaPanel from '../aria/AriaPanel';
-import { useAria } from '@/hooks/aria/useAria';
 
 export default function MeetingRoom({ sessionId }: { sessionId: string }) {
   const [appUserId, setAppUserId] = useState<string | null>(null);
@@ -27,19 +27,26 @@ export default function MeetingRoom({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     let id = localStorage.getItem('aria_user_id');
     if (!id) {
-       id = crypto.randomUUID();
-       localStorage.setItem('aria_user_id', id);
+      id = crypto.randomUUID();
+      localStorage.setItem('aria_user_id', id);
     }
     setAppUserId(id);
   }, []);
 
-  if (!appUserId) return <div className="h-screen bg-gray-900 text-white flex items-center justify-center">Loading...</div>;
+  if (!appUserId) {
+    return (
+      <div className="h-screen bg-surface-0 flex items-center justify-center">
+        <div className="text-slate-400 text-sm">Loading…</div>
+      </div>
+    );
+  }
 
   return <MeetingRoomInner sessionId={sessionId} appUserId={appUserId} />;
 }
 
-function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string, appUserId: string }) {
+function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
   const router = useRouter();
+
   const { session } = useSession(sessionId);
   const { participants } = useParticipants(sessionId);
   const { messages, sendMessage } = useChat(sessionId);
@@ -48,23 +55,26 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string, appUser
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [isTeacherSpeaking, setIsTeacherSpeaking] = useState(false);
 
-  const localParticipant = useMemo(() => participants.find((p) => p.app_user_id === appUserId), [participants, appUserId]);
+  const localParticipant = useMemo(
+    () => participants.find(p => p.app_user_id === appUserId),
+    [participants, appUserId]
+  );
   const isTeacher = localParticipant?.role === 'teacher';
 
   const {
+    client: agoraClient,
     connectionState,
     localVideoTrack,
     remoteUsers,
     isMicEnabled,
     isCameraEnabled,
     isScreenSharing,
-    startScreenShare,
-    stopScreenShare,
     toggleMic,
     toggleCamera,
+    startScreenShare,
+    stopScreenShare,
     leave,
-    client: agoraClient,
-    error
+    error: agoraError,
   } = useAgoraMeeting(sessionId, appUserId);
 
   const {
@@ -74,9 +84,14 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string, appUser
     sessionId,
     appUserId,
     role: (localParticipant?.role as 'teacher' | 'student') ?? 'student',
-    agoraClient: isTeacher ? agoraClient : null, // only teacher hosts ARIA
+    // Only the teacher's browser hosts ARIA — students receive voice via Agora
+    agoraClient: isTeacher ? agoraClient : null,
     isTeacherSpeaking,
   });
+
+  const handleSpeakingChange = useCallback((speaking: boolean) => {
+    setIsTeacherSpeaking(speaking);
+  }, []);
 
   useSpeechRecognition(
     sessionId,
@@ -84,140 +99,156 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string, appUser
     localParticipant?.role,
     localParticipant?.name,
     isMicEnabled,
-    isTeacher ? setIsTeacherSpeaking : undefined
+    appUserId,
+    isTeacher ? handleSpeakingChange : undefined
   );
 
+  // Redirect when session ends (e.g., teacher ended it from another client)
   useEffect(() => {
     if (session?.status === 'ended' || session?.status === 'ending') {
-       router.push(`/summary/${sessionId}`);
+      router.push(`/summary/${sessionId}`);
     }
   }, [session?.status, router, sessionId]);
 
-  const handleLeave = async () => {
-      pauseAria();
-      try {
-         await leave();
-      } catch (e) {
-          console.error("Agora leave error", e);
-      }
+  const handleLeave = useCallback(async () => {
+    pauseAria();
+    try {
+      await leave();
+    } catch (e) {
+      console.error('[MeetingRoom] Agora leave error', e);
+    }
+    if (localParticipant) {
+      const supabase = getSupabaseBrowser(appUserId);
+      await supabase
+        .from('participants')
+        .update({ left_at: new Date().toISOString() })
+        .eq('id', localParticipant.id);
+    }
+    supabaseBrowser.removeAllChannels();
+    router.push(isTeacher ? `/summary/${sessionId}` : '/');
+  }, [pauseAria, leave, localParticipant, appUserId, isTeacher, sessionId, router]);
 
-      if (localParticipant) {
-          await supabaseBrowser.from('participants').update({ left_at: new Date().toISOString() }).eq('id', localParticipant.id);
-      }
-
-      supabaseBrowser.removeAllChannels();
-      router.push(isTeacher ? `/summary/${sessionId}` : '/');
-  };
-
-  const handleEndClass = async () => {
-      setShowEndDialog(false);
-      pauseAria();
-      await supabaseBrowser.from('sessions').update({ status: 'ending' }).eq('id', sessionId);
-      await handleLeave();
-  };
+  const handleEndClass = useCallback(async () => {
+    setShowEndDialog(false);
+    pauseAria();
+    // Mark session as ending — all clients redirect via Realtime
+    const supabase = getSupabaseBrowser(appUserId);
+    await supabase.from('sessions').update({ status: 'ending' }).eq('id', sessionId);
+    await handleLeave();
+  }, [pauseAria, appUserId, sessionId, handleLeave]);
 
   const classroom = session?.classrooms;
 
+  const togglePanel = useCallback(
+    (panel: 'chat' | 'participants' | 'aria') =>
+      setActivePanel(prev => prev === panel ? null : panel),
+    []
+  );
+
   return (
-    <div className="flex flex-col h-screen bg-[#0f1117] text-white overflow-hidden">
+    <div className="flex flex-col h-screen bg-surface-0 text-white overflow-hidden">
       <ConnectionBanner state={connectionState} />
-      {(error || voiceError) && (
-        <div className="bg-red-500/10 border-b border-red-500/30 text-red-400 px-4 py-2 text-sm">
-          {error || voiceError}
+
+      {/* Error banners */}
+      {(agoraError || voiceError) && (
+        <div className="bg-live-red/10 border-b border-live-red/30 text-live-red px-4 py-2 text-xs font-medium">
+          {agoraError || voiceError}
         </div>
       )}
 
       <MeetingHeader
-         title={classroom?.name || 'Classroom'}
-         topic={classroom?.topic}
-         status={session?.status || 'active'}
-         connectionState={connectionState}
-         startedAt={session?.started_at}
+        title={classroom?.name ?? 'Classroom'}
+        topic={classroom?.topic}
+        status={session?.status ?? 'active'}
+        connectionState={connectionState}
+        startedAt={session?.started_at}
       />
 
       <div className="flex flex-1 overflow-hidden">
-         <div className="flex-1 flex flex-col overflow-hidden">
-            <VideoGrid>
-               {/* Local User */}
-               <VideoTile
-                  isLocal
-                  name={`${localParticipant?.name || 'You'}`}
-                  role={localParticipant?.role || 'student'}
-                  track={localVideoTrack}
-                  hasAudio={isMicEnabled}
-                  hasVideo={isCameraEnabled}
-               />
-
-               {/* ARIA Tile */}
-               {isTeacher && (
-                 <AriaTile state={ariaState} />
-               )}
-
-               {/* Remote Users */}
-               {Object.values(remoteUsers).map(user => {
-                  const p = participants.find((p) => p.app_user_id === user.uid);
-                  return (
-                    <VideoTile
-                       key={user.uid}
-                       user={user}
-                       name={p?.name || user.uid}
-                       role={p?.role || 'student'}
-                       track={user.videoTrack}
-                    />
-                  );
-               })}
-            </VideoGrid>
-
-            <MeetingControls
-               isMicEnabled={isMicEnabled}
-               isCameraEnabled={isCameraEnabled}
-               isScreenSharing={isScreenSharing}
-               onToggleMic={toggleMic}
-               onToggleCamera={toggleCamera}
-               onToggleScreenShare={isScreenSharing ? stopScreenShare : startScreenShare}
-               onToggleChat={() => setActivePanel(p => p === 'chat' ? null : 'chat')}
-               onToggleParticipants={() => setActivePanel(p => p === 'participants' ? null : 'participants')}
-               isTeacher={isTeacher}
-               onToggleAria={() => setActivePanel(p => p === 'aria' ? null : 'aria')}
-               onLeave={() => isTeacher ? setShowEndDialog(true) : handleLeave()}
-               activePanel={activePanel}
+        {/* Main content */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <VideoGrid>
+            {/* Local user */}
+            <VideoTile
+              isLocal
+              name={localParticipant?.name ?? 'You'}
+              role={localParticipant?.role ?? 'student'}
+              track={localVideoTrack}
+              hasAudio={isMicEnabled}
+              hasVideo={isCameraEnabled}
             />
-         </div>
 
-         {/* Side panels */}
-         {activePanel === 'chat' && (
-            <ChatPanel
-               messages={messages}
-               localRole={localParticipant?.role || 'student'}
-               onSendMessage={(text: string) => sendMessage(localParticipant?.id || '', localParticipant?.role || 'student', localParticipant?.name || 'User', text)}
-               onClose={() => setActivePanel(null)}
-            />
-         )}
-         {activePanel === 'participants' && (
-            <ParticipantsPanel
-               participants={participants}
-               onClose={() => setActivePanel(null)}
-            />
-         )}
-         {activePanel === 'aria' && isTeacher && (
-            <AriaPanel
-               appUserId={appUserId}
-               ariaMode={ariaMode}
-               onModeChange={setAriaMode}
-               ariaPaused={ariaPaused}
-               onPause={pauseAria}
-               onResume={resumeAria}
-               onCommand={sendCommand}
-               agoraClient={agoraClient}
-               onClose={() => setActivePanel(null)}
-            />
-         )}
+            {/* ARIA tile — only shown to teachers */}
+            {isTeacher && <AriaTile state={ariaState} />}
+
+            {/* Remote users */}
+            {Object.values(remoteUsers).map(user => {
+              const p = participants.find(part => part.app_user_id === user.uid);
+              return (
+                <VideoTile
+                  key={user.uid}
+                  user={user}
+                  name={p?.name ?? String(user.uid)}
+                  role={p?.role ?? 'student'}
+                  track={user.videoTrack}
+                />
+              );
+            })}
+          </VideoGrid>
+
+          <MeetingControls
+            isMicEnabled={isMicEnabled}
+            isCameraEnabled={isCameraEnabled}
+            isScreenSharing={isScreenSharing}
+            activePanel={activePanel}
+            isTeacher={isTeacher}
+            ariaMode={ariaMode}
+            onToggleMic={toggleMic}
+            onToggleCamera={toggleCamera}
+            onToggleScreenShare={isScreenSharing ? stopScreenShare : startScreenShare}
+            onToggleChat={() => togglePanel('chat')}
+            onToggleParticipants={() => togglePanel('participants')}
+            onToggleAria={() => togglePanel('aria')}
+            onLeave={() => isTeacher ? setShowEndDialog(true) : handleLeave()}
+          />
+        </div>
+
+        {/* Side panels — INSIDE the flex container so layout doesn't break */}
+        {activePanel === 'chat' && (
+          <ChatPanel
+            messages={messages}
+            localRole={localParticipant?.role}
+            onSendMessage={text => sendMessage(localParticipant?.id ?? '', localParticipant?.role ?? 'student', localParticipant?.name ?? 'User', text)}
+            onClose={() => setActivePanel(null)}
+          />
+        )}
+        {activePanel === 'participants' && (
+          <ParticipantsPanel
+            participants={participants}
+            onClose={() => setActivePanel(null)}
+          />
+        )}
+        {activePanel === 'aria' && isTeacher && agoraClient && (
+          <AriaPanel
+            sessionId={sessionId}
+            appUserId={appUserId}
+            ariaMode={ariaMode}
+            ariaState={ariaState}
+            ariaPaused={ariaPaused}
+            agoraClient={agoraClient}
+            onModeChange={setAriaMode}
+            onPause={pauseAria}
+            onResume={resumeAria}
+            onCommand={sendCommand}
+            onClose={() => setActivePanel(null)}
+          />
+        )}
       </div>
 
       <EndMeetingDialog
-         isOpen={showEndDialog}
-         onConfirm={handleEndClass}
-         onCancel={() => setShowEndDialog(false)}
+        isOpen={showEndDialog}
+        onConfirm={handleEndClass}
+        onCancel={() => setShowEndDialog(false)}
       />
     </div>
   );

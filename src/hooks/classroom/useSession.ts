@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabaseBrowser } from '@/services/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { Session } from '@/types/session'; // Added typing instead of any
+import { Session } from '@/types/session';
 
 export function useSession(sessionId: string) {
   const [session, setSession] = useState<Session | null>(null);
@@ -12,13 +12,14 @@ export function useSession(sessionId: string) {
     let isMounted = true;
 
     async function fetchSession() {
-      const { data, error } = await supabaseBrowser
+      // Join classrooms so MeetingHeader can display the class name and topic
+      const { data, error: fetchError } = await supabaseBrowser
         .from('sessions')
         .select('*, classrooms(name, subject, topic, grade, lesson_description, join_code)')
         .eq('id', sessionId)
         .single();
 
-      if (error && isMounted) setError(error.message);
+      if (fetchError && isMounted) setError(fetchError.message);
       if (data && isMounted) setSession(data as unknown as Session);
     }
 
@@ -33,10 +34,8 @@ export function useSession(sessionId: string) {
         { event: 'UPDATE', schema: 'public', table: 'sessions', filter: `id=eq.${sessionId}` },
         (payload) => {
           if (isMounted) {
-            setSession((prev: Session | null) => {
-              // Maintain classrooms relation which is not included in the payload
-              return prev ? { ...prev, ...payload.new } : (payload.new as unknown as Session);
-            });
+            // Merge updated fields while keeping the joined classrooms data
+            setSession(prev => prev ? { ...prev, ...payload.new } as Session : null);
           }
         }
       )

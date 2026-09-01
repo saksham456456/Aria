@@ -1,93 +1,76 @@
+'use client';
+
 import { useEffect, useRef } from 'react';
-import { supabaseBrowser } from '@/services/supabase/client';
+import { getSupabaseBrowser } from '@/services/supabase/client';
 
 export function useSpeechRecognition(
-  sessionId: string,
-  participantId: string | undefined,
-  role: string | undefined,
-  name: string | undefined,
-  isMicEnabled: boolean,
-  onTeacherSpeaking?: (speaking: boolean) => void
+  sessionId:         string,
+  participantId:     string | undefined,
+  role:              string | undefined,
+  name:              string | undefined,
+  isMicEnabled:      boolean,
+  appUserId:         string,
+  onSpeakingChange?: (speaking: boolean) => void,
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef  = useRef<SpeechRecognition | null>(null);
+  // Ref mirrors state so onend callback never reads a stale closure value
   const isMicEnabledRef = useRef(isMicEnabled);
-  const speakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    isMicEnabledRef.current = isMicEnabled;
-  }, [isMicEnabled]);
+  useEffect(() => { isMicEnabledRef.current = isMicEnabled; }, [isMicEnabled]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn('Speech Recognition API not supported in this browser.');
+    const Ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!Ctor) {
+      console.warn('[useSpeechRecognition] Web Speech API unavailable — Chrome recommended');
       return;
     }
 
     if (!isMicEnabled || !participantId) {
-       if (recognitionRef.current) {
-          recognitionRef.current.stop();
-          recognitionRef.current = null;
-       }
-       if (onTeacherSpeaking && role === 'teacher') {
-         onTeacherSpeaking(false);
-       }
-       return;
+      recognitionRef.current?.stop();
+      recognitionRef.current = null;
+      return;
     }
 
-    if (recognitionRef.current) return; // Already running
+    if (recognitionRef.current) return; // already running
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true; // Need interim for speech detection
-    recognition.lang = 'en-US'; // Default, could be configurable
+    const recognition = new Ctor();
+    recognition.continuous     = true;
+    recognition.interimResults = false;
+    recognition.lang           = 'en-US';
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = async (event: any) => {
+    recognition.onstart = () => { onSpeakingChange?.(true); };
+
+    recognition.onresult = async (event: SpeechRecognitionEvent) => {
       const result = event.results[event.results.length - 1];
-
-      // Notify speaking state
-      if (onTeacherSpeaking && role === 'teacher') {
-        onTeacherSpeaking(true);
-        if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
-        speakingTimeoutRef.current = setTimeout(() => {
-          onTeacherSpeaking(false);
-        }, 1500); // Stop speaking if no result for 1.5s
-      }
-
-      if (result.isFinal) {
-        const text = result[0].transcript.trim();
-        if (text) {
-           await supabaseBrowser.from('transcript_segments').insert({
-              session_id: sessionId,
-              participant_id: participantId,
-              speaker_role: role,
-              speaker_name: name,
-              text: text,
-              start_time: new Date().toISOString(), // approximation
-              end_time: new Date().toISOString(),
-           });
-        }
-      }
+      if (!result.isFinal) return;
+      const text = result[0].transcript.trim();
+      if (!text) return;
+      onSpeakingChange?.(true);
+      const supabase = getSupabaseBrowser(appUserId);
+      await supabase.from('transcript_segments').insert({
+        session_id:     sessionId,
+        participant_id: participantId,
+        speaker_role:   role,
+        speaker_name:   name,
+        text,
+        start_time:     new Date().toISOString(),
+        end_time:       new Date().toISOString(),
+      });
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error', event.error);
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        console.warn('[useSpeechRecognition] error:', event.error);
+      }
+      onSpeakingChange?.(false);
     };
 
+    // Use ref (not closure variable) so restart always sees the live value
     recognition.onend = () => {
-      // Auto-restart if mic is still enabled
+      onSpeakingChange?.(false);
       if (isMicEnabledRef.current && recognitionRef.current) {
-         try {
-           recognition.start();
-         } catch {
-           // ignore already started errors
-         }
+        try { recognition.start(); } catch { /* already starting */ }
       }
     };
 
@@ -95,15 +78,13 @@ export function useSpeechRecognition(
       recognition.start();
       recognitionRef.current = recognition;
     } catch {
-      console.error("Failed to start speech recognition");
+      console.error('[useSpeechRecognition] failed to start recognition');
     }
 
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
-      if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
+      recognitionRef.current?.stop();
+      recognitionRef.current = null;
+      onSpeakingChange?.(false);
     };
-  }, [isMicEnabled, participantId, sessionId, role, name, onTeacherSpeaking]);
+  }, [isMicEnabled, participantId, sessionId, role, name, appUserId, onSpeakingChange]);
 }
