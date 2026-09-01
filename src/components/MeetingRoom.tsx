@@ -8,6 +8,7 @@ import { VideoGrid } from './VideoGrid';
 import { ChatPanel } from './ChatPanel';
 import { ParticipantsPanel } from './ParticipantsPanel';
 import { AriaControlPanel } from './AriaControlPanel';
+import { AriaSandboxPanel } from './AriaSandboxPanel';
 
 interface MeetingRoomProps {
   sessionId: string;
@@ -27,7 +28,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   lessonContext
 }) => {
   const numericUid = Math.abs(hashCode(userId));
-  const [activeSidePanel, setActiveSidePanel] = useState<'chat' | 'participants' | 'aria' | null>('chat');
+  const [activeSidePanel, setActiveSidePanel] = useState<'chat' | 'participants' | 'aria' | 'sandbox' | null>('chat');
 
   const {
     client: agoraClient,
@@ -46,10 +47,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     transcripts,
     learningGaps,
     sendMessage,
+    addTranscript,
 
   } = useMeetingSync(sessionId);
 
-  const { ariaState, setMode, forceIntervene } = useAriaEngine(
+  const { ariaState, setMode, forceIntervene, speak } = useAriaEngine(
     sessionId,
     lessonContext,
     transcripts,
@@ -97,6 +99,16 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                 }`}
               >
                 ✨ ARIA Controls
+              </button>
+            )}
+            {role === 'teacher' && (
+              <button
+                onClick={() => setActiveSidePanel(activeSidePanel === 'sandbox' ? null : 'sandbox')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 ${
+                  activeSidePanel === 'sandbox' ? 'bg-warning-amber text-black' : 'bg-warning-amber/10 border-warning-amber/30 text-warning-amber hover:bg-warning-amber/20'
+                }`}
+              >
+                🧪 Sandbox
               </button>
             )}
           </div>
@@ -183,6 +195,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
               onSetMode={setMode}
               onForceIntervene={forceIntervene}
               learningGaps={learningGaps}
+              onClose={() => setActiveSidePanel(null)}
+            />
+          )}
+          {activeSidePanel === 'sandbox' && (
+            <AriaSandboxPanel
+              onInjectTranscript={(text, speakerName, speakerRole) => addTranscript({ speaker_name: speakerName, speaker_role: speakerRole, text })}
+              onTestVoice={(text) => speak(text, agoraClient)}
               onClose={() => setActiveSidePanel(null)}
             />
           )}
