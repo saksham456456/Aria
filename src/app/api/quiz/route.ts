@@ -68,18 +68,9 @@ Must return JSON matching this schema:
 
     const quizContent = JSON.parse(completion.choices[0]?.message?.content ?? '{"questions": []}');
 
-    // Broadcast the quiz to all clients in the session
-    const channel = supabaseServer.channel(`quiz-${data.sessionId}`);
-    await channel.send({
-      type: 'broadcast',
-      event: 'new_quiz',
-      payload: { quiz: quizContent },
-    });
-    
-    // Cleanup channel
-    await supabaseServer.removeChannel(channel);
-
-    return successResponse({ message: 'Quiz broadcasted' });
+    // Return the quiz to the client so the teacher's browser can securely broadcast it
+    // Serverless environments often kill WebSockets before 'SUBSCRIBED' fires
+    return successResponse({ quiz: quizContent });
 
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {

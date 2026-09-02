@@ -79,11 +79,27 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
   const handleTriggerQuiz = async () => {
     try {
       if (!appUserId) return;
-      await fetch('/api/quiz', {
+      const res = await fetch('/api/quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-user-id': appUserId },
         body: JSON.stringify({ sessionId })
       });
+      
+      const json = await res.json();
+      if (json.success && json.data?.quiz) {
+        // Teacher's client handles the broadcast because serverless edge functions drop websockets
+        const supabase = getSupabaseBrowser(appUserId);
+        const channel = supabase.channel(`quiz-${sessionId}`);
+        channel.subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.send({
+              type: 'broadcast',
+              event: 'new_quiz',
+              payload: { quiz: json.data.quiz },
+            });
+          }
+        });
+      }
     } catch (err) {
       console.error('Failed to trigger quiz:', err);
     }
