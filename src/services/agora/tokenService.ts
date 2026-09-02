@@ -1,11 +1,14 @@
+import { hashUid } from '@/lib/uid';
+
 export const fetchAgoraToken = async (sessionId: string, appUserId: string): Promise<string> => {
+  const numericUid = hashUid(appUserId);
   const res = await fetch('/api/agora/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-user-id': appUserId,
     },
-    body: JSON.stringify({ channelName: sessionId, uid: appUserId, role: 'publisher' }),
+    body: JSON.stringify({ channelName: sessionId, uid: numericUid, role: 'publisher' }),
   });
 
   const data = await res.json();

@@ -15,6 +15,7 @@ interface MeetingControlsProps {
   onToggleChat:     () => void;
   onToggleParticipants: () => void;
   onToggleAria:     () => void;
+  onMuteAll?:       () => void;
   onLeave:          () => void;
 }
 
@@ -33,12 +34,12 @@ function CtrlBtn({ onClick, label, icon, active, danger, highlight, title }: Ctr
     <button
       onClick={onClick}
       title={title ?? label}
-      className={`group relative flex flex-col items-center justify-center w-14 h-14 rounded-2xl transition-all duration-200 select-none ${
+      className={`group relative flex flex-col items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl transition-all duration-200 select-none ${
         danger
-          ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
+          ? 'bg-red-500/90 hover:bg-red-500 text-white shadow-lg shadow-red-500/25'
           : active
-          ? 'bg-surface-3 hover:bg-surface-4 text-white'
-          : 'bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white'
+          ? 'bg-white/10 hover:bg-white/15 text-white ring-1 ring-white/10'
+          : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-white'
       }`}
     >
       <span className="mb-0.5">{icon}</span>
@@ -62,16 +63,17 @@ const ChatIcon    = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 2
 const PeopleIcon  = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>;
 const AriaIcon    = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>;
 const LeaveIcon   = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>;
+const MuteAllIcon = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>;
 
 const ARIA_MODE_BADGE: Record<AriaMode, string> = { auto: 'A', manual: 'M', silent: 'S' };
 
 export default function MeetingControls({
   isMicEnabled, isCameraEnabled, isScreenSharing, activePanel,
   isTeacher, ariaMode, onToggleMic, onToggleCamera, onToggleScreenShare,
-  onToggleChat, onToggleParticipants, onToggleAria, onLeave,
+  onToggleChat, onToggleParticipants, onToggleAria, onMuteAll, onLeave,
 }: MeetingControlsProps) {
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center justify-center gap-3 p-3 bg-surface-1/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50">
+    <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-surface-0/85 backdrop-blur-2xl border border-white/[0.08] rounded-2xl shadow-2xl shadow-black/60">
       {/* Core media controls */}
       <CtrlBtn
         onClick={onToggleMic}
@@ -124,6 +126,14 @@ export default function MeetingControls({
           active={activePanel === 'aria'}
           highlight={ariaMode ? ARIA_MODE_BADGE[ariaMode] : undefined}
           title="Open ARIA controls"
+        />
+      )}
+      {isTeacher && onMuteAll && (
+        <CtrlBtn
+          onClick={onMuteAll}
+          label="Mute all"
+          icon={<MuteAllIcon />}
+          title="Mute all students"
         />
       )}
 

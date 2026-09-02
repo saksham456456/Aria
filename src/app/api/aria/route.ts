@@ -39,23 +39,37 @@ export async function POST(request: Request) {
         evidence: `Detected during ARIA evaluation`,
       }));
       try {
-        await supabaseServer.from('learning_gaps').insert(gapRows).throwOnError();
+        await supabaseServer.from('learning_gaps').upsert(
+          gapRows,
+          { onConflict: 'session_id,concept' }
+        );
       } catch (e) {
-        console.error('Failed to insert learning gaps', e);
+        console.error('Failed to upsert learning gaps', e);
       }
     }
+
+    // Map LLM response types to valid DB event_type values
+    const EVENT_TYPE_MAP: Record<string, string> = {
+      explanation: 'explanation',
+      quiz_question: 'quiz',
+      clarification: 'explanation',
+      encouragement: 'feedback',
+      silent_note: 'observation',
+      observation: 'observation',
+    };
+    const eventType = result.shouldSpeak
+      ? (EVENT_TYPE_MAP[result.responseType || ''] || 'explanation')
+      : 'observation';
 
     try {
       await supabaseServer.from('aria_events').insert({
         session_id: sessionId,
-        event_type: result.shouldSpeak ? (result.responseType || 'explanation') : 'silent_observation',
-        data: {
-          shouldSpeak: result.shouldSpeak,
-          response: result.response,
-          reason: result.reason,
-          target: result.target,
-          urgency: result.urgency,
-        },
+        event_type: eventType,
+        trigger_text: teacherCommand || null,
+        response_text: result.response || null,
+        urgency: result.urgency ?? null,
+        target: result.target || null,
+        language: result.language || 'en',
       });
     } catch (e) {
       console.error('Failed to log ARIA event', e);

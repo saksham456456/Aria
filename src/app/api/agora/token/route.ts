@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
+import { hashUid } from '@/lib/uid';
 
 export async function POST(req: NextRequest) {
   try {
     const { channelName, uid, role = 'publisher' } = await req.json();
+    const numericUid = typeof uid === 'number' ? uid : hashUid(String(uid || '0'));
 
     const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID;
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
@@ -21,13 +23,13 @@ export async function POST(req: NextRequest) {
       appId,
       appCertificate,
       channelName,
-      uid,
+      numericUid,
       rtcRole,
       privilegeExpiredTs,
       privilegeExpiredTs
     );
 
-    return NextResponse.json({ success: true, data: { token, uid, channelName } });
+    return NextResponse.json({ success: true, data: { token, uid: numericUid, channelName } });
   } catch {
     return NextResponse.json({ success: false, error: { code: 'token_error', message: 'Failed to generate Agora token' } }, { status: 500 });
   }

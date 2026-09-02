@@ -20,7 +20,7 @@ export default function ParticipantsPanel({ participants, onClose, isTeacher, on
   const students = participants.filter(p => p.role === 'student');
 
   return (
-    <div className="w-72 shrink-0 border-l border-surface-3 bg-surface-1 flex flex-col h-full animate-slide-in-right">
+    <div className="w-80 shrink-0 border-l border-white/[0.06] bg-surface-0/95 backdrop-blur-xl flex flex-col h-full animate-slide-in-right">
       <div className="h-14 px-4 flex items-center justify-between border-b border-surface-3 shrink-0">
         <h2 className="text-sm font-semibold text-white">
           People <span className="text-slate-500 font-normal">({participants.length + 1})</span>

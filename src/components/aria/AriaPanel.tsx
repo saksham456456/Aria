@@ -46,7 +46,7 @@ export default function AriaPanel({
   const isBusy = voiceState === 'fetching' || voiceState === 'speaking';
 
   return (
-    <div className="w-80 shrink-0 border-l border-surface-3 bg-surface-1 flex flex-col h-full animate-slide-in-right">
+    <div className="w-80 shrink-0 border-l border-white/[0.06] bg-surface-0/95 backdrop-blur-xl flex flex-col h-full animate-slide-in-right">
       {/* Header */}
       <div className="h-14 px-4 flex items-center justify-between border-b border-surface-3 shrink-0">
         <div className="flex items-center gap-2.5">

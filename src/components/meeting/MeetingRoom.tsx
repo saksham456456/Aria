@@ -219,6 +219,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
         participantCount={participants.length}
         grade={classroom?.grade}
         subject={classroom?.subject}
+        joinCode={isTeacher ? classroom?.join_code : undefined}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -262,6 +263,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             onToggleChat={() => togglePanel('chat')}
             onToggleParticipants={() => togglePanel('participants')}
             onToggleAria={() => togglePanel('aria')}
+            onMuteAll={handleMuteAll}
             onLeave={() => isTeacher ? setShowEndDialog(true) : handleLeave()}
           />
         </div>

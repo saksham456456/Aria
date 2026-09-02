@@ -10,6 +10,7 @@ import AgoraRTC, {
 import { getAgoraClient, resetAgoraClient } from '@/services/agora/agoraClient';
 import { fetchAgoraToken } from '@/services/agora/tokenService';
 import { AgoraUser, ConnectionState } from '@/types/agora';
+import { hashUid } from '@/lib/uid';
 
 export function useAgoraMeeting(sessionId: string, appUserId: string) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
@@ -114,7 +115,8 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
       // ── Join + publish ──────────────────────────────────────────────────
 
       setConnectionState('connecting');
-      await client.join(appId, sessionId, token, appUserId);
+      const numericUid = hashUid(appUserId);
+      await client.join(appId, sessionId, token, numericUid);
 
       const [audio, video] = await AgoraRTC.createMicrophoneAndCameraTracks(
         {},

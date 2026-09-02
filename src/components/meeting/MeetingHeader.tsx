@@ -36,6 +36,7 @@ type MeetingHeaderProps = {
   participantCount?: number;
   grade?: string;
   subject?: string;
+  joinCode?:       string;
 };
 
 function formatTime(seconds: number): string {
@@ -44,7 +45,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-export default function MeetingHeader({ title, topic, status, connectionState, startedAt, participantCount, grade, subject }: MeetingHeaderProps) {
+export default function MeetingHeader({ title, topic, status, connectionState, startedAt, participantCount, grade, subject, joinCode }: MeetingHeaderProps) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -57,7 +58,7 @@ export default function MeetingHeader({ title, topic, status, connectionState, s
   }, [startedAt]);
 
   return (
-    <header className="h-14 flex items-center justify-between px-4 bg-surface-1 border-b border-surface-3 shrink-0">
+    <header className="h-14 flex items-center justify-between px-4 bg-surface-0/90 backdrop-blur-xl border-b border-white/[0.06] shrink-0">
       {/* Left — ARIA logo + class name + topic */}
       <div className="flex items-center gap-3 min-w-0">
         <div className="shrink-0 w-8 h-8 rounded-lg bg-aria-purple flex items-center justify-center">
@@ -88,6 +89,13 @@ export default function MeetingHeader({ title, topic, status, connectionState, s
 
       {/* Right — connection status */}
       <div className="flex items-center gap-4 shrink-0">
+
+        {joinCode && (
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-aria-purple/10 border border-aria-purple/20">
+            <span className="text-[10px] text-slate-400">Code:</span>
+            <span className="text-xs font-mono font-bold text-aria-purple-light tracking-wider">{joinCode}</span>
+          </div>
+        )}
 
         {/* Participant Count */}
         {participantCount !== undefined && (
