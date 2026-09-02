@@ -22,6 +22,9 @@ import ChatPanel from '../chat/ChatPanel';
 import ParticipantsPanel from '../participants/ParticipantsPanel';
 import AriaTile from '../aria/AriaTile';
 import AriaPanel from '../aria/AriaPanel';
+import ConfusionMeter from '../classroom/ConfusionMeter';
+import PopQuiz from '../classroom/PopQuiz';
+import AgentBrainTerminal from '../aria/AgentBrainTerminal';
 
 export default function MeetingRoom({ sessionId }: { sessionId: string }) {
   const [appUserId, setAppUserId] = useState<string | null>(null);
@@ -69,8 +72,22 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
   const { messages, sendMessage } = useChat(sessionId, appUserId);
 
   const [activePanel, setActivePanel] = useState<'chat' | 'participants' | 'aria' | null>(null);
+  const [showBrain, setShowBrain] = useState(false);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [isTeacherSpeaking, setIsTeacherSpeaking] = useState(false);
+
+  const handleTriggerQuiz = async () => {
+    try {
+      if (!appUserId) return;
+      await fetch('/api/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': appUserId },
+        body: JSON.stringify({ sessionId })
+      });
+    } catch (err) {
+      console.error('Failed to trigger quiz:', err);
+    }
+  };
 
   const localParticipant = useMemo(
     () => participants.find(p => p.app_user_id === appUserId),
@@ -256,6 +273,17 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             })}
           </VideoGrid>
 
+          {/* WOW Factor Components */}
+          {appUserId && <PopQuiz sessionId={sessionId} appUserId={appUserId} />}
+          {isTeacher && appUserId && <ConfusionMeter sessionId={sessionId} appUserId={appUserId} />}
+          {appUserId && (
+            <AgentBrainTerminal 
+              sessionId={sessionId} 
+              appUserId={appUserId} 
+              isOpen={showBrain} 
+            />
+          )}
+
           <MeetingControls
             isMicEnabled={isMicEnabled}
             isCameraEnabled={isCameraEnabled}
@@ -269,6 +297,8 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             onToggleChat={() => togglePanel('chat')}
             onToggleParticipants={() => togglePanel('participants')}
             onToggleAria={() => togglePanel('aria')}
+            onTriggerQuiz={handleTriggerQuiz}
+            onToggleBrain={() => setShowBrain(!showBrain)}
             onMuteAll={handleMuteAll}
             onLeave={() => isTeacher ? setShowEndDialog(true) : handleLeave()}
           />

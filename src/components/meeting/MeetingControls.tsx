@@ -15,6 +15,8 @@ interface MeetingControlsProps {
   onToggleChat:     () => void;
   onToggleParticipants: () => void;
   onToggleAria:     () => void;
+  onTriggerQuiz?:   () => void;
+  onToggleBrain?:   () => void;
   onMuteAll?:       () => void;
   onLeave:          () => void;
 }
@@ -70,7 +72,7 @@ const ARIA_MODE_BADGE: Record<AriaMode, string> = { auto: 'A', manual: 'M', sile
 export default function MeetingControls({
   isMicEnabled, isCameraEnabled, isScreenSharing, activePanel,
   isTeacher, ariaMode, onToggleMic, onToggleCamera, onToggleScreenShare,
-  onToggleChat, onToggleParticipants, onToggleAria, onMuteAll, onLeave,
+  onToggleChat, onToggleParticipants, onToggleAria, onTriggerQuiz, onToggleBrain, onMuteAll, onLeave,
 }: MeetingControlsProps) {
   return (
     <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-surface-0/85 backdrop-blur-2xl border border-white/[0.08] rounded-2xl shadow-2xl shadow-black/60">
@@ -126,6 +128,22 @@ export default function MeetingControls({
           active={activePanel === 'aria'}
           highlight={ariaMode ? ARIA_MODE_BADGE[ariaMode] : undefined}
           title="Open ARIA controls"
+        />
+      )}
+      {isTeacher && onTriggerQuiz && (
+        <CtrlBtn
+          onClick={onTriggerQuiz}
+          label="Quiz"
+          icon={<svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+          title="Generate AI Pop Quiz"
+        />
+      )}
+      {isTeacher && onToggleBrain && (
+        <CtrlBtn
+          onClick={onToggleBrain}
+          label="Terminal"
+          icon={<svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+          title="Toggle Agent Brain"
         />
       )}
       {isTeacher && onMuteAll && (
