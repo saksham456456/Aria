@@ -95,8 +95,9 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
   } = useAgoraMeeting(sessionId, appUserId);
 
   const {
-    ariaMode, setAriaMode, ariaState, ariaPaused,
-    pauseAria, resumeAria, sendCommand, voiceError,
+    ariaMode,
+    pauseAria,
+    voiceError,
   } = useAria({
     sessionId,
     appUserId,

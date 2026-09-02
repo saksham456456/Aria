@@ -29,7 +29,7 @@ export default function AriaPanel({ onClose }: AriaPanelProps) {
         </div>
 
         <p className="text-xs text-slate-400 text-center px-2">
-          Simply use your microphone to speak with her. She handles listening and speaking automatically on Agora's low-latency network.
+          Simply use your microphone to speak with her. She handles listening and speaking automatically on Agora&apos;s low-latency network.
         </p>
       </div>
     </div>
