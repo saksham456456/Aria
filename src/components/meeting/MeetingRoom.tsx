@@ -234,9 +234,14 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
               hasVideo={isCameraEnabled}
             />
 
-            <AriaTile state={ariaState} />
+            {/* Special ARIA Tile */}
+            {activePanel === 'aria' && (
+              <AriaTile user={remoteUsers[100]} />
+            )}
 
-            {Object.values(remoteUsers).map(user => {
+            {Object.values(remoteUsers)
+              .filter(user => String(user.uid) !== '100')
+              .map(user => {
               const p = participants.find(part => part.app_user_id === String(user.uid));
               return (
                 <VideoTile
