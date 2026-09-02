@@ -288,16 +288,6 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
 
         {activePanel === 'aria' && isTeacher && agoraClient && (
           <AriaPanel
-            sessionId={sessionId}
-            appUserId={appUserId}
-            ariaMode={ariaMode}
-            ariaState={ariaState}
-            ariaPaused={ariaPaused}
-            agoraClient={agoraClient}
-            onModeChange={setAriaMode}
-            onPause={pauseAria}
-            onResume={resumeAria}
-            onCommand={sendCommand}
             onClose={() => setActivePanel(null)}
           />
         )}
