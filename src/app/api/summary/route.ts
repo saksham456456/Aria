@@ -10,21 +10,21 @@ const SummaryRequestSchema = z.object({
 });
 
 const SummarySchema = z.object({
-  overview: z.string(),
-  topicsCovered: z.array(z.string()),
+  overview: z.string().default(''),
+  topicsCovered: z.array(z.string()).default([]),
   commonLearningGaps: z.array(z.object({
-    concept: z.string(),
-    description: z.string(),
-    affectedStudents: z.array(z.string()),
-    recommendation: z.string(),
-  })),
+    concept: z.string().default(''),
+    description: z.string().default(''),
+    affectedStudents: z.array(z.string()).default([]),
+    recommendation: z.string().default(''),
+  })).default([]),
   studentInsights: z.array(z.object({
-    studentName: z.string(),
-    strengths: z.array(z.string()),
-    needsSupport: z.array(z.string()),
-  })),
-  ariaInterventionsCount: z.number(),
-  recommendations: z.string(),
+    studentName: z.string().default(''),
+    strengths: z.array(z.string()).default([]),
+    needsSupport: z.array(z.string()).default([]),
+  })).default([]),
+  ariaInterventionsCount: z.coerce.number().default(0),
+  recommendations: z.string().default(''),
 });
 
 export async function POST(request: Request) {
