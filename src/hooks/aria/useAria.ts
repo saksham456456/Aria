@@ -32,12 +32,15 @@ export function useAria({
       agentInvitedRef.current = true;
       console.log('[ARIA] Inviting agent to channel:', sessionId, 'requester_id:', agoraClient.uid);
       
+      const currentRemoteUids = agoraClient.remoteUsers.map(u => String(u.uid));
+      
       fetch('/api/invite-agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channel_name: sessionId,
           requester_id: String(agoraClient.uid),
+          additional_uids: currentRemoteUids,
         }),
       })
       .then(res => res.json())

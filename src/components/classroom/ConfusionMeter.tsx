@@ -55,17 +55,65 @@ export default function ConfusionMeter({ sessionId, appUserId }: ConfusionMeterP
     return 'Confused';
   };
 
+  // Extract just the stroke/glow color from the current state
+  const getGlowColor = () => {
+    if (level < 40) return 'rgba(52, 211, 153, 0.4)'; // emerald
+    if (level < 75) return 'rgba(251, 191, 36, 0.6)'; // amber
+    return 'rgba(244, 63, 94, 0.8)'; // rose
+  };
+
+  const getStrokeColor = () => {
+    if (level < 40) return '#34d399';
+    if (level < 75) return '#fbbf24';
+    return '#f43f5e';
+  };
+
+  const radius = 24;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (level / 100) * circumference;
+
   return (
-    <div className="absolute top-4 right-4 z-50 glass rounded-xl p-3 flex flex-col items-center min-w-[120px] transition-all duration-300">
-      <p className="text-xs text-slate-400 font-medium mb-2 uppercase tracking-widest">Class Confusion</p>
-      <div className="relative w-full h-2 bg-black/40 rounded-full overflow-hidden mb-2">
-        <div 
-          className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${getColor().split(' ')[1].replace('/20', '')}`} 
-          style={{ width: `${level}%` }} 
-        />
+    <div className="absolute top-4 right-4 z-50 glass rounded-2xl p-4 flex flex-col items-center min-w-[140px] transition-all duration-300 shadow-2xl"
+         style={{ boxShadow: `0 0 30px ${getGlowColor()}` }}>
+      <p className="text-[10px] text-slate-300 font-bold mb-3 uppercase tracking-widest">Class Status</p>
+      
+      <div className="relative flex items-center justify-center w-16 h-16 mb-3">
+        {/* Radar sweeping background effect if high confusion */}
+        {level >= 75 && (
+          <div className="absolute inset-0 rounded-full border border-rose-500/50 animate-ping opacity-75" />
+        )}
+        
+        {/* Background track */}
+        <svg className="w-full h-full transform -rotate-90">
+          <circle 
+            cx="32" cy="32" r={radius} 
+            stroke="rgba(255,255,255,0.1)" 
+            strokeWidth="4" 
+            fill="transparent" 
+          />
+          {/* Animated fill */}
+          <circle 
+            cx="32" cy="32" r={radius} 
+            stroke={getStrokeColor()}
+            strokeWidth="4" 
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        
+        {/* Center percentage */}
+        <div className="absolute inset-0 flex items-center justify-center flex-col">
+          <span className={`text-sm font-black transition-colors duration-500 ${getColor().split(' ')[0]}`}>
+            {level}%
+          </span>
+        </div>
       </div>
-      <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${getColor()} transition-colors duration-300`}>
-        {getLabel()} ({level}%)
+
+      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md border ${getColor()} transition-colors duration-300 uppercase tracking-wider`}>
+        {getLabel()}
       </span>
     </div>
   );

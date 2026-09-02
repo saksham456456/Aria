@@ -13,6 +13,7 @@ import {
 interface ClientStartRequest {
   requester_id: string;
   channel_name: string;
+  additional_uids?: string[];
 }
 
 interface AgentResponse {
@@ -47,7 +48,7 @@ function requireEnv(name: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body: ClientStartRequest = await request.json();
-    const { requester_id, channel_name } = body;
+    const { requester_id, channel_name, additional_uids = [] } = body;
 
     const appId = requireEnv('NEXT_PUBLIC_AGORA_APP_ID');
     const appCertificate = process.env.AGORA_APP_CERTIFICATE || requireEnv('NEXT_AGORA_APP_CERTIFICATE');
@@ -58,6 +59,9 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    // Agent must subscribe to all currently active users in the room
+    const allTargetUids = Array.from(new Set([requester_id, ...additional_uids]));
 
     const client = new AgoraClient({
       area: Area.US,
@@ -126,7 +130,7 @@ export async function POST(request: NextRequest) {
     const session = agent.createSession({
       channel: channel_name,
       agentUid,
-      remoteUids: [requester_id], // you can pass multiple or the teacher's ID
+      remoteUids: allTargetUids,
       idleTimeout: 300,
       expiresIn: ExpiresIn.hours(1),
       debug: false,

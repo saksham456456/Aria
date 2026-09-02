@@ -253,7 +253,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             />
 
             {/* Special ARIA Tile */}
-            {activePanel === 'aria' && (
+            {(remoteUsers[100] || activePanel === 'aria') && (
               <AriaTile user={remoteUsers[100]} />
             )}
 
