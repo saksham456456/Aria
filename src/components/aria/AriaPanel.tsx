@@ -20,17 +20,51 @@ export default function AriaPanel({ onClose }: AriaPanelProps) {
         <button onClick={onClose} className="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
-        <div className="rounded-xl border border-connected-green/40 bg-connected-green/5 p-4 text-center">
-          <p className="text-sm font-semibold text-connected-green mb-2">Agora AI Engine Connected</p>
+      <div className="flex-1 overflow-y-auto p-5 space-y-6">
+        <div className="rounded-xl border border-connected-green/40 bg-connected-green/10 p-4 text-center shadow-lg shadow-connected-green/5">
+          <div className="w-10 h-10 mx-auto bg-connected-green/20 rounded-full flex items-center justify-center mb-3">
+            <span className="text-connected-green text-xl animate-pulse">Y'</span>
+          </div>
+          <p className="text-sm font-bold text-white mb-1">Agora AI Engine Active</p>
           <p className="text-xs text-slate-300 leading-relaxed">
-            ARIA has been upgraded to use the official Agora Conversational AI Engine!
+            ARIA is fully powered by Agora&apos;s low-latency Conversational AI. She is currently listening to the classroom.
           </p>
         </div>
 
-        <p className="text-xs text-slate-400 text-center px-2">
-          Simply use your microphone to speak with her. She handles listening and speaking automatically on Agora&apos;s low-latency network.
-        </p>
+        <div className="space-y-3">
+          <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">How to use ARIA</h3>
+          
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex gap-3 items-start">
+            <div className="w-6 h-6 rounded bg-aria-purple/20 flex items-center justify-center shrink-0 mt-0.5">
+              <span className="text-aria-purple text-xs">1</span>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white mb-0.5">Just Speak</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">No need to click anything. Just talk normally and ARIA will respond intelligently.</p>
+            </div>
+          </div>
+
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex gap-3 items-start">
+            <div className="w-6 h-6 rounded bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+              <span className="text-emerald-400 text-xs">2</span>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white mb-0.5">Deploy Pop Quizzes</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">Click the Quiz button to generate an instant AI pop quiz based on what you just taught.</p>
+            </div>
+          </div>
+
+          <div className="bg-surface-1 border border-surface-3 rounded-xl p-3 flex gap-3 items-start">
+            <div className="w-6 h-6 rounded bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+              <span className="text-amber-400 text-xs">3</span>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white mb-0.5">Monitor Confusion</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">Watch the Class Status radar. If students express confusion, ARIA logs the learning gap.</p>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   );
