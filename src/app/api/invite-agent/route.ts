@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const { requester_id, channel_name } = body;
 
     const appId = requireEnv('NEXT_PUBLIC_AGORA_APP_ID');
-    const appCertificate = requireEnv('NEXT_AGORA_APP_CERTIFICATE');
+    const appCertificate = process.env.AGORA_APP_CERTIFICATE || requireEnv('NEXT_AGORA_APP_CERTIFICATE');
 
     if (!channel_name || !requester_id) {
       return NextResponse.json(
