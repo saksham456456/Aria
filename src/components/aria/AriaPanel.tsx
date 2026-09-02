@@ -23,7 +23,7 @@ export default function AriaPanel({ onClose }: AriaPanelProps) {
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         <div className="rounded-xl border border-connected-green/40 bg-connected-green/10 p-4 text-center shadow-lg shadow-connected-green/5">
           <div className="w-10 h-10 mx-auto bg-connected-green/20 rounded-full flex items-center justify-center mb-3">
-            <span className="text-connected-green text-xl animate-pulse">Y'</span>
+            <span className="text-connected-green text-xl animate-pulse">Y&apos;</span>
           </div>
           <p className="text-sm font-bold text-white mb-1">Agora AI Engine Active</p>
           <p className="text-xs text-slate-300 leading-relaxed">
