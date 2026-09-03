@@ -1,6 +1,9 @@
 {
-  "name": "tmp_app",
-  "version": "0.1.0",
+  "name": "aria-coteacher",
+  "version": "1.0.0",
+  "description": "An AI-powered co-teacher for virtual classrooms using Agora Voice AI.",
+  "author": "EchoSphere Hackathon Team",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "next dev",
