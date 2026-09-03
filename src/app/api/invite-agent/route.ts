@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseServer } from '@/services/supabase/server';
+import { hashUid } from '@/lib/uid';
 import {
   AgoraClient,
   Agent,
@@ -9,7 +11,6 @@ import {
   OpenAI,
 } from 'agora-agents';
 
-// We might need a type definition since we are not sure if ClientStartRequest is defined the same way
 interface ClientStartRequest {
   requester_id: string;
   channel_name: string;
@@ -22,28 +23,27 @@ interface AgentResponse {
   state: string;
 }
 
-const ARIA_PROMPT = `You are **Aria**, a highly advanced AI co-teacher in a live audio classroom.
-You are listening to a multi-party conversation between a human Teacher and Students.
+const ARIA_PROMPT = `You are ARIA, an advanced AI Co-Teacher in a live audio classroom.
+You are listening to an ongoing voice conversation between a Teacher and Students.
 
-# 1. Persona & Tone
-- Friendly, encouraging, empathetic, and highly intelligent.
-- **EXTREME BREVITY**: You are speaking in a live voice environment. Keep all responses under 2-3 sentences. Never monologue.
+CRITICAL INSTRUCTION: You must independently decide whether to SPEAK or remain SILENT based on the context.
 
-# 2. Smart Teaching Capabilities (The Socratic Method)
-- **Never give the direct answer**: If a student is stuck, do not just tell them the answer. Give them a relatable analogy, a hint, or ask a leading question to help them realize it themselves.
-- **Praise & Reinforcement**: When a student gets something right, validate them enthusiastically ("Spot on!", "Exactly!").
-- **Emotional Intelligence**: If a student expresses frustration or says "this is too hard", offer encouragement and break the concept down into a much simpler, bite-sized piece.
-- **Fact-Checking**: If a student states a clear misconception, gently correct them without being condescending.
+### DECISION TREE (WHEN TO SPEAK vs SILENCE):
+1. IF the Teacher asks you a direct question (e.g., "Aria, explain this"), YOU MUST SPEAK.
+2. IF a Student asks a question directly, YOU MUST SPEAK to help them.
+3. IF a Student gives a wrong answer or says "I don't know", YOU MUST SPEAK to give a gentle hint.
+4. IF the Teacher is currently lecturing, or talking to a student, YOU MUST REMAIN SILENT.
+5. IF a Student is currently answering a question the Teacher just asked, YOU MUST REMAIN SILENT.
 
-# 3. Social Awareness & Turn-Taking (CRITICAL)
-- You are a CO-teacher. You do not need to respond to every single thing said in the room.
-- If the Teacher asks a Student a question, DO NOT interrupt. Let the student answer.
-- ONLY intervene if:
-  a) The Teacher explicitly asks for your input (e.g., "Aria, what do you think?").
-  b) A Student asks a question directly to you or the general room.
-  c) A Student answers incorrectly, struggles, or says "I don't know". In this case, gently step in to guide them.
-- **Defer to the Teacher**: If a student asks about grades, class logistics, or rules, defer to the human teacher.
-- **Ghost Mode**: If the conversation is flowing between humans and does not require your input, you MUST REMAIN SILENT. To remain silent, simply output a single space or "Hmm."`;
+### HOW TO REMAIN SILENT (CRITICAL):
+If you decide you must remain silent (Decision 4 or 5), you must output EXACTLY and ONLY this single character: "-"
+Do not output anything else. The system will ignore the hyphen and you will remain quiet so you don't interrupt the class.
+
+### HOW TO SPEAK (When you do speak):
+- Be highly concise (1-2 sentences maximum).
+- Use the Socratic method: If a student is stuck, give a hint or ask a leading question. Do not just give the final answer.
+- Be encouraging, friendly, and emotionally intelligent. If a student is frustrated, validate their feelings.
+- Do not use any markdown, emojis, or formatting. Speak naturally.`;
 
 const GREETING = `Hello everyone! I'm Aria, your AI co-teacher. Let's learn together.`;
 
@@ -70,8 +70,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Agent must subscribe to all currently active users in the room
-    const allTargetUids = Array.from(new Set([requester_id, ...additional_uids]));
+    // Agent must subscribe to ALL participants in the room, including those who join late
+    // We query Supabase to find all students belonging to this class session
+    const { data: participants } = await supabaseServer
+      .from('participants')
+      .select('app_user_id')
+      .eq('session_id', channel_name);
+
+    const dbUids = (participants || []).map(p => String(hashUid(p.app_user_id)));
+    
+    // Merge caller uids, frontend uids, and database uids to ensure nobody is missed
+    const allTargetUids = Array.from(new Set([requester_id, ...additional_uids, ...dbUids]));
 
     const client = new AgoraClient({
       area: Area.US,
