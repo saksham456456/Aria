@@ -26,8 +26,7 @@ export function useAria({
 
   const agentInvitedRef = useRef(false);
 
-  useEffect(() => {
-    // Only the teacher invites the agent. We wait until agoraClient has joined and has a uid.
+  const startAria = useCallback(() => {
     if (role === 'teacher' && agoraClient && agoraClient.uid && !agentInvitedRef.current) {
       agentInvitedRef.current = true;
       console.log('[ARIA] Inviting agent to channel:', sessionId, 'requester_id:', agoraClient.uid);
@@ -47,15 +46,17 @@ export function useAria({
       .then(data => {
         if (data.error) {
           console.error('[ARIA] Failed to invite agent:', data.error);
+          agentInvitedRef.current = false; // allow retry
         } else {
           console.log('[ARIA] Agent started:', data);
         }
       })
       .catch(err => {
         console.error('[ARIA] Error calling invite-agent:', err);
+        agentInvitedRef.current = false;
       });
     }
-  }, [role, agoraClient, sessionId, agoraClient?.uid]);
+  }, [role, agoraClient, sessionId]);
 
   const pauseAria = useCallback(() => {
     setAriaPaused(true);
@@ -74,13 +75,15 @@ export function useAria({
 
   return {
     ariaMode,
-    setAriaMode,
-    ariaState,
     ariaPaused,
-    pauseAria,
-    resumeAria,
-    sendCommand,
+    ariaState,
     lastCommand,
     voiceError: null,
+    client: agoraClient,
+    startAria,
+    pauseAria,
+    resumeAria,
+    setAriaMode,
+    sendCommand,
   };
 }

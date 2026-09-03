@@ -135,6 +135,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
   const {
     ariaMode,
     pauseAria,
+    startAria,
     voiceError,
   } = useAria({
     sessionId,
@@ -346,6 +347,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
         {activePanel === 'aria' && isTeacher && agoraClient && (
           <AriaPanel
             onClose={() => setActivePanel(null)}
+            onStartAria={startAria}
           />
         )}
       </div>

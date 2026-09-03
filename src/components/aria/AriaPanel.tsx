@@ -1,10 +1,15 @@
 'use client';
 
+import { useState } from 'react';
+
 interface AriaPanelProps {
   onClose: () => void;
+  onStartAria?: () => void;
 }
 
-export default function AriaPanel({ onClose }: AriaPanelProps) {
+export default function AriaPanel({ onClose, onStartAria }: AriaPanelProps) {
+  const [hasStarted, setHasStarted] = useState(false);
+
   return (
     <div className="w-80 shrink-0 border-l border-white/[0.06] bg-surface-0/95 backdrop-blur-xl flex flex-col h-full animate-slide-in-right">
       <div className="h-14 px-4 flex items-center justify-between border-b border-surface-3 shrink-0">
@@ -21,15 +26,35 @@ export default function AriaPanel({ onClose }: AriaPanelProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
-        <div className="rounded-xl border border-connected-green/40 bg-connected-green/10 p-4 text-center shadow-lg shadow-connected-green/5">
-          <div className="w-10 h-10 mx-auto bg-connected-green/20 rounded-full flex items-center justify-center mb-3">
-            <span className="text-connected-green text-xl animate-pulse">Y&apos;</span>
+        
+        {/* NEW INVITE BUTTON */}
+        {!hasStarted ? (
+          <div className="rounded-xl border border-aria-purple/40 bg-aria-purple/10 p-4 text-center shadow-lg shadow-aria-purple/5">
+            <p className="text-sm font-bold text-white mb-2">Invite ARIA</p>
+            <p className="text-xs text-slate-300 leading-relaxed mb-4">
+              Wait until all students have joined the room, then click below to invite ARIA to the class.
+            </p>
+            <button
+              onClick={() => {
+                setHasStarted(true);
+                onStartAria?.();
+              }}
+              className="w-full py-2 px-4 bg-aria-purple hover:bg-aria-purple-dark text-white rounded-lg font-bold text-sm transition-colors"
+            >
+              Start AI Agent
+            </button>
           </div>
-          <p className="text-sm font-bold text-white mb-1">Agora AI Engine Active</p>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            ARIA is fully powered by Agora&apos;s low-latency Conversational AI. She is currently listening to the classroom.
-          </p>
-        </div>
+        ) : (
+          <div className="rounded-xl border border-connected-green/40 bg-connected-green/10 p-4 text-center shadow-lg shadow-connected-green/5">
+            <div className="w-10 h-10 mx-auto bg-connected-green/20 rounded-full flex items-center justify-center mb-3">
+              <span className="text-connected-green text-xl animate-pulse">Y&apos;</span>
+            </div>
+            <p className="text-sm font-bold text-white mb-1">Agora AI Engine Active</p>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ARIA is fully powered by Agora&apos;s low-latency Conversational AI. She is currently listening to the classroom.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-3">
           <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">How to use ARIA</h3>
