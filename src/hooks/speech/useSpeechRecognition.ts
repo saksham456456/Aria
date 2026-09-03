@@ -52,16 +52,27 @@ export function useSpeechRecognition(
       const text = result[0].transcript.trim();
       if (!text) return;
       onSpeakingChangeRef.current?.(true);
-      const supabase = getSupabaseBrowser(appUserId);
-      await supabase.from('transcript_segments').insert({
-        session_id:     sessionId,
-        participant_id: participantId,
-        speaker_role:   role,
-        speaker_name:   name,
-        text,
-        start_time:     new Date().toISOString(),
-        end_time:       new Date().toISOString(),
-      });
+      
+      try {
+        const res = await fetch('/api/transcripts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id:     sessionId,
+            participant_id: participantId,
+            speaker_role:   role || 'student',
+            speaker_name:   name || 'User',
+            text,
+            start_time:     new Date().toISOString(),
+            end_time:       new Date().toISOString(),
+          }),
+        });
+        if (!res.ok) {
+          console.error('[useSpeechRecognition] Failed to log transcript to DB:', await res.text());
+        }
+      } catch (err) {
+        console.error('[useSpeechRecognition] Network error logging transcript:', err);
+      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
