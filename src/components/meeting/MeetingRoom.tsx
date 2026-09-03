@@ -87,13 +87,13 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
       
       const json = await res.json();
       if (!json.success) {
-        alert(\`Quiz failed: \${json.error?.message || 'Unknown error'}\`);
+        alert(`Quiz failed: ${json.error?.message || 'Unknown error'}`);
         return;
       }
       if (json.success && json.data?.quiz) {
         // Teacher's client handles the broadcast because serverless edge functions drop websockets
         const supabase = getSupabaseBrowser(appUserId);
-        const channel = supabase.channel(\`quiz-\${sessionId}\`);
+        const channel = supabase.channel(`quiz-${sessionId}`);
         channel.subscribe(async (status) => {
           if (status === 'SUBSCRIBED') {
             await channel.send({
