@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { IAgoraRTCClient } from 'agora-rtc-sdk-ng';
 
 export type AriaMode = 'auto' | 'manual' | 'silent';
