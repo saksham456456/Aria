@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { getSupabaseBrowser } from '@/services/supabase/client';
 
 export function useSpeechRecognition(
   sessionId:         string,

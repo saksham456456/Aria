@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { supabaseServer } from '@/services/supabase/server';
 import { z } from 'zod';
 import { errorResponse, successResponse } from '@/lib/api';
