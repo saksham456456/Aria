@@ -73,11 +73,7 @@ export async function POST(request: Request) {
 
     let safeTranscripts = transcripts ?? [];
     if (safeTranscripts.length === 0) {
-      safeTranscripts = [
-        { speaker_name: 'Teacher', text: 'Welcome to our lesson on Photosynthesis!' },
-        { speaker_name: 'Student', text: 'I am a bit confused about how the Calvin cycle works. Is it light-dependent?' },
-        { speaker_name: 'Aria', text: 'Good question! The Calvin cycle is actually light-independent, but it relies on the ATP created during the light-dependent reactions.' },
-      ];
+      return errorResponse('bad_request', 'Not enough conversation data to generate a summary', 400);
     }
 
     const context = {
@@ -116,30 +112,8 @@ ${JSON.stringify({
       const rawJson = completion.choices[0]?.message?.content ?? '{}';
       summaryData = SummarySchema.parse(JSON.parse(rawJson));
     } catch (parseErr) {
-      console.error('[summary] Groq output parse error or API failure, using demo fallback:', parseErr);
-      
-      // HARDCORE DEMO FALLBACK
-      summaryData = {
-        overview: "The class covered the fundamentals of Photosynthesis, focusing on the differences between light-dependent and light-independent reactions.",
-        topicsCovered: ["Photosynthesis Overview", "Calvin Cycle", "ATP Generation", "Chlorophyll Function"],
-        commonLearningGaps: [
-          {
-            concept: "Calvin Cycle Dependency",
-            description: "Students were confused about whether the Calvin cycle requires direct sunlight.",
-            affectedStudents: ["Student"],
-            recommendation: "Provide a clearer diagram showing how ATP from the light reactions feeds into the Calvin cycle."
-          }
-        ],
-        studentInsights: [
-          {
-            studentName: "Student",
-            strengths: ["Actively asked questions about complex mechanisms."],
-            needsSupport: ["Needs review on light-independent reaction pathways."]
-          }
-        ],
-        ariaInterventionsCount: 1,
-        recommendations: "Start the next class with a quick 5-minute review of the Calvin cycle."
-      };
+      console.error('[summary] Groq output parse error or API failure:', parseErr);
+      return errorResponse('internal_error', 'Failed to generate summary from AI provider', 500);
     }
 
     // Upsert to be safe against race conditions
