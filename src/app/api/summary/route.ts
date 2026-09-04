@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       supabaseServer.from('learning_gaps').select('*').eq('session_id', data.sessionId),
     ]);
 
-    let safeTranscripts = transcripts ?? [];
+    const safeTranscripts = transcripts ?? [];
     if (safeTranscripts.length === 0) {
       return errorResponse('bad_request', 'Not enough conversation data to generate a summary', 400);
     }

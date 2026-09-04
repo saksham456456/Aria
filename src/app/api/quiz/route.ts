@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       .gte('created_at', fiveMinutesAgo)
       .order('created_at', { ascending: true });
 
-    let transcriptData = transcripts;
+    const transcriptData = transcripts;
     if (!transcripts || transcripts.length === 0) {
       return errorResponse('bad_request', 'Not enough conversation data to generate a quiz', 400);
     }
