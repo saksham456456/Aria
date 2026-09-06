@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       .from('session_summaries')
       .select('*')
       .eq('session_id', data.sessionId)
-      .single();
+      .maybeSingle();
 
     if (existingSummary) {
       return successResponse({ summary: existingSummary, cached: true });
@@ -116,6 +116,14 @@ ${JSON.stringify({
       return errorResponse('internal_error', 'Failed to generate summary from AI provider', 500);
     }
 
+    if (!summaryData.overview && summaryData.topicsCovered.length === 0) {
+      return errorResponse('internal_error', 'AI could not generate summary from the conversation', 500);
+    }
+
+    const ariaInterventionsCount = (ariaEvents && ariaEvents.length > 0)
+      ? ariaEvents.length
+      : summaryData.ariaInterventionsCount;
+
     // Upsert to be safe against race conditions
     const { error: upsertErr } = await supabaseServer.from('session_summaries').upsert({
       session_id:              data.sessionId,
@@ -123,7 +131,7 @@ ${JSON.stringify({
       topics_covered:          summaryData.topicsCovered,
       common_learning_gaps:    summaryData.commonLearningGaps,
       student_insights:        summaryData.studentInsights,
-      aria_interventions_count: summaryData.ariaInterventionsCount,
+      aria_interventions_count: ariaInterventionsCount,
       recommendations:         summaryData.recommendations,
     }, { onConflict: 'session_id' });
 

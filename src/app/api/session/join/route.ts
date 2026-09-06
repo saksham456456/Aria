@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
     const { data: classroom, error: classroomError } = await supabaseServer
       .from('classrooms')
-      .select('id')
+      .select('id, teacher_app_user_id')
       .eq('join_code', data.joinCode)
       .single();
 
@@ -43,6 +43,22 @@ export async function POST(request: Request) {
       return errorResponse('not_active', 'No active session for this classroom. Ask your teacher to start one.', 404);
     }
 
+    // Preserve teacher role if user is creator or previously registered as teacher
+    let role: 'teacher' | 'student' = classroom.teacher_app_user_id === appUserId ? 'teacher' : 'student';
+
+    if (role !== 'teacher') {
+      const { data: existingParticipant } = await supabaseServer
+        .from('participants')
+        .select('role')
+        .eq('session_id', session.id)
+        .eq('app_user_id', appUserId)
+        .maybeSingle();
+
+      if (existingParticipant?.role === 'teacher') {
+        role = 'teacher';
+      }
+    }
+
     const { error: participantError } = await supabaseServer
       .from('participants')
       .upsert(
@@ -50,7 +66,7 @@ export async function POST(request: Request) {
           session_id:    session.id,
           app_user_id:   appUserId,
           name:          data.name,
-          role:          'student',
+          role,
           learning_level: data.learningLevel,
           language:      data.language,
         },
@@ -59,7 +75,7 @@ export async function POST(request: Request) {
 
     if (participantError) throw new Error(`Failed to register participant: ${participantError.message}`);
 
-    return successResponse({ sessionId: session.id });
+    return successResponse({ sessionId: session.id, role });
 
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {

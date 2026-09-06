@@ -9,6 +9,17 @@ const QuizRequestSchema = z.object({
   sessionId: z.string().uuid(),
 });
 
+const QuizQuestionSchema = z.object({
+  question: z.string().default(''),
+  options: z.array(z.string()).default([]),
+  correctAnswer: z.string().default(''),
+  explanation: z.string().default(''),
+});
+
+const QuizResponseSchema = z.object({
+  questions: z.array(QuizQuestionSchema).default([]),
+});
+
 export async function POST(request: Request) {
   try {
     const appUserId = request.headers.get('x-user-id');
@@ -31,20 +42,37 @@ export async function POST(request: Request) {
 
     // Get last 5 minutes of transcript
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: transcripts } = await supabaseServer
+    let { data: transcripts } = await supabaseServer
       .from('transcript_segments')
       .select('speaker_name, text')
       .eq('session_id', data.sessionId)
       .gte('created_at', fiveMinutesAgo)
       .order('created_at', { ascending: true });
 
-    const transcriptData = transcripts;
+    // Fallback to recent session transcripts if 5-minute window is empty
+    if (!transcripts || transcripts.length === 0) {
+      const { data: recent } = await supabaseServer
+        .from('transcript_segments')
+        .select('speaker_name, text')
+        .eq('session_id', data.sessionId)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (recent && recent.length > 0) {
+        transcripts = [...recent].reverse();
+      }
+    }
+
     if (!transcripts || transcripts.length === 0) {
       return errorResponse('bad_request', 'Not enough conversation data to generate a quiz', 400);
     }
 
+    const formattedTranscripts = transcripts
+      .map((t) => `${t.speaker_name}: ${t.text}`)
+      .join('\n');
+
     const groq = getGroqClient();
-    const systemMessage = `You are an AI teacher. Generate a 3-question multiple-choice pop quiz based EXACTLY on the transcript provided. 
+    const systemMessage = `You are an AI teacher. Generate a 3-question multiple-choice pop quiz based EXACTLY on the transcript dialogue provided. 
 Must return JSON matching this schema:
 {
   "questions": [
@@ -57,27 +85,34 @@ Must return JSON matching this schema:
   ]
 }`;
 
-    let quizContent;
+    let validatedQuiz;
 
     try {
       const completion = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: systemMessage },
-          { role: 'user', content: JSON.stringify(transcriptData) }
+          { role: 'user', content: formattedTranscripts }
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.3,
+        temperature: 0.2,
       });
-      quizContent = JSON.parse(completion.choices[0]?.message?.content ?? '{"questions": []}');
+
+      const rawContent = completion.choices[0]?.message?.content ?? '{}';
+      const parsedJson = JSON.parse(rawContent);
+      validatedQuiz = QuizResponseSchema.parse(parsedJson);
     } catch (apiError) {
       console.error('Groq API failed:', apiError);
       return errorResponse('internal_error', 'Failed to generate quiz from AI provider', 500);
     }
 
+    if (!validatedQuiz.questions || validatedQuiz.questions.length === 0) {
+      return errorResponse('internal_error', 'AI could not generate quiz questions from the conversation', 500);
+    }
+
     // Return the quiz to the client so the teacher's browser can securely broadcast it
     // Serverless environments often kill WebSockets before 'SUBSCRIBED' fires
-    return successResponse({ quiz: quizContent });
+    return successResponse({ quiz: validatedQuiz });
 
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {

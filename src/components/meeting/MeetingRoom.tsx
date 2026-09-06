@@ -11,6 +11,7 @@ import { useChat } from '@/hooks/classroom/useChat';
 import { useAgoraMeeting } from '@/hooks/meeting/useAgoraMeeting';
 import { useAria } from '@/hooks/aria/useAria';
 import { useSpeechRecognition } from '@/hooks/speech/useSpeechRecognition';
+import { hashUid } from '@/lib/uid';
 
 import VideoGrid from './VideoGrid';
 import VideoTile from './VideoTile';
@@ -202,9 +203,9 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
 
   useEffect(() => {
     if (session?.status === 'ended' || session?.status === 'ending') {
-      router.push(`/summary/${sessionId}`);
+      router.push(isTeacher ? `/summary/${sessionId}` : '/');
     }
-  }, [session?.status, router, sessionId]);
+  }, [session?.status, isTeacher, router, sessionId]);
 
   const handleLeave = useCallback(async () => {
     pauseAria();
@@ -227,8 +228,18 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
   const handleEndClass = useCallback(async () => {
     setShowEndDialog(false);
     pauseAria();
-    const supabase = getSupabaseBrowser(appUserId);
-    await supabase.from('sessions').update({ status: 'ending' }).eq('id', sessionId);
+    try {
+      await fetch('/api/session/end', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': appUserId,
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+    } catch (err) {
+      console.error('[MeetingRoom] Failed to end session via API:', err);
+    }
     await handleLeave();
   }, [pauseAria, appUserId, sessionId, handleLeave]);
 
@@ -282,7 +293,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             {Object.values(remoteUsers)
               .filter(user => String(user.uid) !== '100')
               .map(user => {
-              const p = participants.find(part => part.app_user_id === String(user.uid));
+              const p = participants.find(part => hashUid(part.app_user_id) === Number(user.uid));
               return (
                 <VideoTile
                   key={user.uid}
@@ -296,7 +307,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
           </VideoGrid>
 
           {/* WOW Factor Components */}
-          {appUserId && <PopQuiz sessionId={sessionId} appUserId={appUserId} />}
+          {appUserId && <PopQuiz sessionId={sessionId} appUserId={appUserId} isTeacher={isTeacher} />}
           {isTeacher && appUserId && <ConfusionMeter sessionId={sessionId} appUserId={appUserId} />}
           {appUserId && (
             <AgentBrainTerminal 

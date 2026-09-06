@@ -5,6 +5,7 @@ import { IAgoraRTCClient } from 'agora-rtc-sdk-ng';
 
 export type AriaMode = 'auto' | 'manual' | 'silent';
 export type AriaState = 'listening' | 'thinking' | 'speaking' | 'paused' | 'error';
+export type AriaAgentStatus = 'idle' | 'joining' | 'running' | 'error';
 
 interface UseAriaOptions {
   sessionId: string;
@@ -16,12 +17,15 @@ interface UseAriaOptions {
 
 export function useAria({
   sessionId,
+  appUserId,
   role,
   agoraClient,
 }: UseAriaOptions) {
   const [ariaMode, setAriaMode] = useState<AriaMode>('auto');
   const [ariaPaused, setAriaPaused] = useState(false);
   const [ariaState, setAriaState] = useState<AriaState>('listening');
+  const [status, setStatus] = useState<AriaAgentStatus>('idle');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
 
   const agentInvitedRef = useRef(false);
@@ -29,17 +33,19 @@ export function useAria({
   const startAria = useCallback(() => {
     if (role === 'teacher' && agoraClient && agoraClient.uid && !agentInvitedRef.current) {
       agentInvitedRef.current = true;
+      setStatus('joining');
+      setVoiceError(null);
       console.log('[ARIA] Inviting agent to channel:', sessionId, 'requester_id:', agoraClient.uid);
-      
-      const currentRemoteUids = agoraClient.remoteUsers.map(u => String(u.uid));
       
       fetch('/api/invite-agent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': appUserId,
+        },
         body: JSON.stringify({
           channel_name: sessionId,
           requester_id: String(agoraClient.uid),
-          additional_uids: currentRemoteUids,
         }),
       })
       .then(res => res.json())
@@ -47,16 +53,21 @@ export function useAria({
         if (data.error) {
           console.error('[ARIA] Failed to invite agent:', data.error);
           agentInvitedRef.current = false; // allow retry
+          setStatus('error');
+          setVoiceError(data.error);
         } else {
           console.log('[ARIA] Agent started:', data);
+          setStatus('running');
         }
       })
       .catch(err => {
         console.error('[ARIA] Error calling invite-agent:', err);
         agentInvitedRef.current = false;
+        setStatus('error');
+        setVoiceError(err instanceof Error ? err.message : String(err));
       });
     }
-  }, [role, agoraClient, sessionId]);
+  }, [role, agoraClient, sessionId, appUserId]);
 
   const pauseAria = useCallback(() => {
     setAriaPaused(true);
@@ -77,8 +88,10 @@ export function useAria({
     ariaMode,
     ariaPaused,
     ariaState,
+    status,
+    agentStatus: status,
     lastCommand,
-    voiceError: null,
+    voiceError,
     client: agoraClient,
     startAria,
     pauseAria,

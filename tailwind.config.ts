@@ -19,7 +19,7 @@ const config: Config = {
         'aria-purple-light': '#a78bfa',
         'aria-purple-dim':   '#4c1d95',
         // Role colours
-        'role-teacher': '#3b82f6',
+        'role-teacher': '#f59e0b',
         'role-student': '#10b981',
         'role-aria':    '#7c3aed',
         // Status
