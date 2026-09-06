@@ -1,15 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-
 interface AriaPanelProps {
   onClose: () => void;
   onStartAria?: () => void;
+  agentStatus?: 'idle' | 'joining' | 'running' | 'error';
+  voiceError?: string | null;
 }
 
-export default function AriaPanel({ onClose, onStartAria }: AriaPanelProps) {
-  const [hasStarted, setHasStarted] = useState(false);
-
+export default function AriaPanel({ onClose, onStartAria, agentStatus = 'idle', voiceError }: AriaPanelProps) {
   return (
     <div className="w-80 shrink-0 border-l border-white/[0.06] bg-surface-0/95 backdrop-blur-xl flex flex-col h-full animate-slide-in-right">
       <div className="h-14 px-4 flex items-center justify-between border-b border-surface-3 shrink-0">
@@ -19,7 +17,9 @@ export default function AriaPanel({ onClose, onStartAria }: AriaPanelProps) {
           </div>
           <div>
             <p className="text-sm font-semibold text-white leading-tight">ARIA Co-Teacher</p>
-            <p className="text-[10px] leading-tight text-connected-green">Active</p>
+            <p className={`text-[10px] leading-tight ${agentStatus === 'running' ? 'text-connected-green' : agentStatus === 'error' ? 'text-live-red' : 'text-slate-400'}`}>
+              {agentStatus === 'running' ? 'Active' : agentStatus === 'error' ? 'Error' : agentStatus === 'joining' ? 'Starting...' : 'Idle'}
+            </p>
           </div>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
@@ -28,23 +28,46 @@ export default function AriaPanel({ onClose, onStartAria }: AriaPanelProps) {
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         
         {/* NEW INVITE BUTTON */}
-        {!hasStarted ? (
+        {agentStatus === 'idle' && (
           <div className="rounded-xl border border-aria-purple/40 bg-aria-purple/10 p-4 text-center shadow-lg shadow-aria-purple/5">
             <p className="text-sm font-bold text-white mb-2">Invite ARIA</p>
             <p className="text-xs text-slate-300 leading-relaxed mb-4">
               Wait until all students have joined the room, then click below to invite ARIA to the class.
             </p>
             <button
-              onClick={() => {
-                setHasStarted(true);
-                onStartAria?.();
-              }}
+              onClick={onStartAria}
               className="w-full py-2 px-4 bg-aria-purple hover:bg-aria-purple-dark text-white rounded-lg font-bold text-sm transition-colors"
             >
               Start AI Agent
             </button>
           </div>
-        ) : (
+        )}
+
+        {agentStatus === 'joining' && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-center shadow-lg shadow-amber-500/5">
+            <p className="text-sm font-bold text-white mb-2 animate-pulse">Connecting to Agora AI...</p>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ARIA is joining the channel. Please wait a moment.
+            </p>
+          </div>
+        )}
+
+        {agentStatus === 'error' && (
+          <div className="rounded-xl border border-live-red/40 bg-live-red/10 p-4 text-center shadow-lg shadow-live-red/5">
+            <p className="text-sm font-bold text-white mb-2 text-live-red">Failed to start ARIA</p>
+            <p className="text-xs text-slate-300 leading-relaxed mb-4">
+              {voiceError || "An unknown error occurred while inviting the AI agent."}
+            </p>
+            <button
+              onClick={onStartAria}
+              className="w-full py-2 px-4 bg-live-red/80 hover:bg-live-red text-white rounded-lg font-bold text-sm transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {agentStatus === 'running' && (
           <div className="rounded-xl border border-connected-green/40 bg-connected-green/10 p-4 text-center shadow-lg shadow-connected-green/5">
             <div className="w-10 h-10 mx-auto bg-connected-green/20 rounded-full flex items-center justify-center mb-3">
               <span className="text-connected-green text-xl animate-pulse">Y&apos;</span>

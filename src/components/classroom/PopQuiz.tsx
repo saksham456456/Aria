@@ -8,9 +8,11 @@ interface PopQuizProps {
   sessionId: string;
   appUserId: string;
   isTeacher?: boolean;
+  isOpen?: boolean;
+  onCloseCreator?: () => void;
 }
 
-export default function PopQuiz({ sessionId, appUserId, isTeacher = false }: PopQuizProps) {
+export default function PopQuiz({ sessionId, appUserId, isTeacher = false, isOpen = false, onCloseCreator }: PopQuizProps) {
   const [topic, setTopic] = useState('');
   const [generating, setGenerating] = useState(false);
   const [pendingQuiz, setPendingQuiz] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -18,14 +20,8 @@ export default function PopQuiz({ sessionId, appUserId, isTeacher = false }: Pop
   const [activeQuiz, setActiveQuiz] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [submitted, setSubmitted] = useState(false);
-  const [showTeacherDialog, setShowTeacherDialog] = useState(isTeacher);
 
-  // Re-open teacher dialog when isTeacher prop changes (if it was closed)
-  useEffect(() => {
-    if (isTeacher && !activeQuiz && !pendingQuiz) {
-      setShowTeacherDialog(true);
-    }
-  }, [isTeacher, activeQuiz, pendingQuiz]);
+
 
   useEffect(() => {
     const supabase = getSupabaseBrowser(appUserId);
@@ -38,19 +34,20 @@ export default function PopQuiz({ sessionId, appUserId, isTeacher = false }: Pop
         setAnswers({});
         setSubmitted(false);
         setPendingQuiz(null); // Clear pending if there was one
-        setShowTeacherDialog(false); // Hide generation dialog when active
+        if (onCloseCreator) onCloseCreator(); // Hide generation dialog when active
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, appUserId]);
 
   // If student and no quiz, don't show anything
   if (!isTeacher && !activeQuiz) return null;
   // If teacher and dialog closed and no quiz, don't show
-  if (isTeacher && !showTeacherDialog && !activeQuiz && !pendingQuiz) return null;
+  if (isTeacher && !isOpen && !activeQuiz && !pendingQuiz) return null;
 
   const handleGenerate = async () => {
     if (!topic.trim()) return;
@@ -111,7 +108,7 @@ export default function PopQuiz({ sessionId, appUserId, isTeacher = false }: Pop
 
   const handleClose = () => {
     setActiveQuiz(null);
-    setShowTeacherDialog(false);
+    if (onCloseCreator) onCloseCreator();
     setPendingQuiz(null);
   };
 
@@ -249,7 +246,7 @@ export default function PopQuiz({ sessionId, appUserId, isTeacher = false }: Pop
   }
 
   // Render the teacher's generation dialog
-  if (isTeacher && showTeacherDialog) {
+  if (isTeacher && isOpen) {
     return (
       <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
         <div className="glass-heavy max-w-lg w-full rounded-2xl p-6 border border-aria-purple/30 shadow-2xl animate-in zoom-in-95 duration-300 relative flex flex-col max-h-full">

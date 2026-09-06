@@ -89,43 +89,12 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
 
   const [activePanel, setActivePanel] = useState<'chat' | 'participants' | 'aria' | null>(null);
   const [showBrain, setShowBrain] = useState(false);
+  const [showQuizCreator, setShowQuizCreator] = useState(false);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [isTeacherSpeaking, setIsTeacherSpeaking] = useState(false);
 
-  const handleTriggerQuiz = async () => {
-    try {
-      if (!appUserId) return;
-      const res = await fetch('/api/quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': appUserId },
-        body: JSON.stringify({ sessionId })
-      });
-      
-      const json = await res.json();
-      if (!json.success) {
-        alert(`Quiz failed: ${json.error?.message || 'Unknown error'}`);
-        return;
-      }
-      if (json.success && json.data?.quiz) {
-        // Teacher's client handles the broadcast because serverless edge functions drop websockets
-        const supabase = getSupabaseBrowser(appUserId);
-        const channel = supabase.channel(`quiz-${sessionId}`, {
-          config: { broadcast: { self: true } },
-        });
-        channel.subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            await channel.send({
-              type: 'broadcast',
-              event: 'new_quiz',
-              payload: { quiz: json.data.quiz },
-            });
-          }
-        });
-      }
-    } catch (err) {
-      console.error('Failed to trigger quiz:', err);
-      alert('Failed to trigger quiz. Check console for details.');
-    }
+  const handleTriggerQuiz = () => {
+    if (isTeacher) setShowQuizCreator(true);
   };
 
   const localParticipant = useMemo(
@@ -155,6 +124,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
     pauseAria,
     startAria,
     voiceError,
+    agentStatus,
   } = useAria({
     sessionId,
     appUserId,
@@ -324,7 +294,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
           </VideoGrid>
 
           {/* WOW Factor Components */}
-          {appUserId && <PopQuiz sessionId={sessionId} appUserId={appUserId} isTeacher={isTeacher} />}
+          {appUserId && <PopQuiz sessionId={sessionId} appUserId={appUserId} isTeacher={isTeacher} isOpen={showQuizCreator} onCloseCreator={() => setShowQuizCreator(false)} />}
           {isTeacher && appUserId && <ConfusionMeter sessionId={sessionId} appUserId={appUserId} />}
           {appUserId && (
             <AgentBrainTerminal 
@@ -384,6 +354,8 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
 
         {activePanel === 'aria' && isTeacher && agoraClient && (
           <AriaPanel
+            agentStatus={agentStatus}
+            voiceError={voiceError}
             onClose={() => setActivePanel(null)}
             onStartAria={startAria}
           />
