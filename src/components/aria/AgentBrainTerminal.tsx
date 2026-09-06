@@ -45,7 +45,7 @@ export default function AgentBrainTerminal({ sessionId, appUserId, isOpen }: Ter
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // Listen to actual transcript inserts to look like live STT buffer
+    // Listen to actual transcript inserts to look like live STT buffer
   useEffect(() => {
     if (!isOpen) return;
     const supabase = getSupabaseBrowser(appUserId);
@@ -72,9 +72,17 @@ export default function AgentBrainTerminal({ sessionId, appUserId, isOpen }: Ter
       addLog('network', `[HEARTBEAT] Latency: ${Math.floor(Math.random() * 40 + 20)}ms | Jitter: ${Math.floor(Math.random() * 5)}ms`);
     }, 8000);
 
+    // Custom event listener for global system/aria actions
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleLog = (e: any) => {
+      addLog('system', e.detail);
+    };
+    window.addEventListener('aria-log', handleLog);
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(pingTimer);
+      window.removeEventListener('aria-log', handleLog);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, sessionId, appUserId]);

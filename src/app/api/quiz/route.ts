@@ -7,6 +7,7 @@ import { getGroqClient } from '@/services/groq/groqClient';
 
 const QuizRequestSchema = z.object({
   sessionId: z.string().uuid(),
+  topic: z.string().min(1, "Topic is required"),
 });
 
 const QuizQuestionSchema = z.object({
@@ -40,40 +41,9 @@ export async function POST(request: Request) {
       return errorResponse('forbidden', 'Only teachers can generate quizzes', 403);
     }
 
-    // Get last 5 minutes of transcript
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    let { data: transcripts } = await supabaseServer
-      .from('transcript_segments')
-      .select('speaker_name, text')
-      .eq('session_id', data.sessionId)
-      .gte('created_at', fiveMinutesAgo)
-      .order('created_at', { ascending: true });
-
-    // Fallback to recent session transcripts if 5-minute window is empty
-    if (!transcripts || transcripts.length === 0) {
-      const { data: recent } = await supabaseServer
-        .from('transcript_segments')
-        .select('speaker_name, text')
-        .eq('session_id', data.sessionId)
-        .order('created_at', { ascending: false })
-        .limit(30);
-
-      if (recent && recent.length > 0) {
-        transcripts = [...recent].reverse();
-      }
-    }
-
-    if (!transcripts || transcripts.length === 0) {
-      return errorResponse('bad_request', 'Not enough conversation data to generate a quiz', 400);
-    }
-
-    const formattedTranscripts = transcripts
-      .map((t) => `${t.speaker_name}: ${t.text}`)
-      .join('\n');
-
     const groq = getGroqClient();
-    const systemMessage = `You are an AI teacher. Generate a 3-question multiple-choice pop quiz based EXACTLY on the transcript dialogue provided. 
-Must return JSON matching this schema:
+    const prompt = `You are an expert educator. Generate exactly 3 multiple-choice questions on the topic: "${data.topic}".
+Must return JSON matching this schema exactly:
 {
   "questions": [
     {
@@ -90,28 +60,32 @@ Must return JSON matching this schema:
     try {
       const completion = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: formattedTranscripts }
-        ],
+        messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
         temperature: 0.2,
       });
 
       const rawContent = completion.choices[0]?.message?.content ?? '{}';
       const parsedJson = JSON.parse(rawContent);
-      validatedQuiz = QuizResponseSchema.parse(parsedJson);
+
+      // Fallback for different JSON structures the LLM might return
+      let normalizedJson = parsedJson;
+      if (Array.isArray(parsedJson)) {
+        normalizedJson = { questions: parsedJson };
+      } else if (parsedJson.quiz && Array.isArray(parsedJson.quiz)) {
+        normalizedJson = { questions: parsedJson.quiz };
+      }
+
+      validatedQuiz = QuizResponseSchema.parse(normalizedJson);
     } catch (apiError) {
       console.error('Groq API failed:', apiError);
       return errorResponse('internal_error', 'Failed to generate quiz from AI provider', 500);
     }
 
     if (!validatedQuiz.questions || validatedQuiz.questions.length === 0) {
-      return errorResponse('internal_error', 'AI could not generate quiz questions from the conversation', 500);
+      return errorResponse('internal_error', 'AI could not generate quiz questions for this topic', 500);
     }
 
-    // Return the quiz to the client so the teacher's browser can securely broadcast it
-    // Serverless environments often kill WebSockets before 'SUBSCRIBED' fires
     return successResponse({ quiz: validatedQuiz });
 
   } catch (err: unknown) {

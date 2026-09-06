@@ -341,8 +341,18 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             activePanel={activePanel}
             isTeacher={isTeacher}
             ariaMode={ariaMode}
-            onToggleMic={toggleMic}
-            onToggleCamera={toggleCamera}
+            onToggleMic={() => {
+              toggleMic();
+              window.dispatchEvent(new CustomEvent('aria-log', {
+                detail: `[USER] ${localParticipant?.name || 'User'} ${isMicEnabled ? 'muted' : 'unmuted'} microphone`
+              }));
+            }}
+            onToggleCamera={() => {
+              toggleCamera();
+              window.dispatchEvent(new CustomEvent('aria-log', {
+                detail: `[USER] ${localParticipant?.name || 'User'} ${isCameraEnabled ? 'disabled' : 'enabled'} camera`
+              }));
+            }}
             onToggleScreenShare={isScreenSharing ? stopScreenShare : startScreenShare}
             onToggleChat={() => togglePanel('chat')}
             onToggleParticipants={() => togglePanel('participants')}
