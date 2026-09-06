@@ -23,6 +23,7 @@ export function useAria({
   const [ariaPaused, setAriaPaused] = useState(false);
   const [ariaState, setAriaState] = useState<AriaState>('listening');
   const [lastCommand, setLastCommand] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(null);
 
   const agentInvitedRef = useRef(false);
 
@@ -49,6 +50,7 @@ export function useAria({
           console.error('[ARIA] Failed to invite agent:', data.error);
         } else {
           console.log('[ARIA] Agent started:', data);
+          setAgentId(data.agent_id);
         }
       })
       .catch(err => {
@@ -56,6 +58,29 @@ export function useAria({
       });
     }
   }, [role, agoraClient, sessionId, agoraClient?.uid]);
+
+  // Sync late joiners to the running agent
+  useEffect(() => {
+    if (role === 'teacher' && agentId && agoraClient) {
+      const handleUserChange = () => {
+        const uids = [String(agoraClient.uid), ...agoraClient.remoteUsers.map(u => String(u.uid))];
+        console.log('[ARIA] Syncing updated UIDs to agent:', uids);
+        fetch('/api/update-agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent_id: agentId, remote_uids: uids }),
+        }).catch(err => console.error('[ARIA] Failed to update agent UIDs', err));
+      };
+
+      agoraClient.on('user-joined', handleUserChange);
+      agoraClient.on('user-left', handleUserChange);
+
+      return () => {
+        agoraClient.off('user-joined', handleUserChange);
+        agoraClient.off('user-left', handleUserChange);
+      };
+    }
+  }, [role, agentId, agoraClient]);
 
   const pauseAria = useCallback(() => {
     setAriaPaused(true);
