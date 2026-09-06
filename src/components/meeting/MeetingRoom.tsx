@@ -51,8 +51,23 @@ export default function MeetingRoom({ sessionId }: { sessionId: string }) {
 }
 
 function MeetingRoomParticipantLoader({ sessionId, appUserId }: { sessionId: string; appUserId: string }) {
+  const router = useRouter();
+  const [timedOut, setTimedOut] = useState(false);
   const { participants } = useParticipants(sessionId, appUserId);
   const localParticipant = useMemo(() => participants.find(p => p.app_user_id === appUserId), [participants, appUserId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTimedOut(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (timedOut && !localParticipant) {
+      router.push('/');
+    }
+  }, [timedOut, localParticipant, router]);
 
   if (!localParticipant) {
     return (
@@ -94,7 +109,9 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
       if (json.success && json.data?.quiz) {
         // Teacher's client handles the broadcast because serverless edge functions drop websockets
         const supabase = getSupabaseBrowser(appUserId);
-        const channel = supabase.channel(`quiz-${sessionId}`);
+        const channel = supabase.channel(`quiz-${sessionId}`, {
+          config: { broadcast: { self: true } },
+        });
         channel.subscribe(async (status) => {
           if (status === 'SUBSCRIBED') {
             await channel.send({
@@ -203,9 +220,9 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
 
   useEffect(() => {
     if (session?.status === 'ended' || session?.status === 'ending') {
-      router.push(isTeacher ? `/summary/${sessionId}` : '/');
+      router.push(`/summary/${sessionId}`);
     }
-  }, [session?.status, isTeacher, router, sessionId]);
+  }, [session?.status, router, sessionId]);
 
   const handleLeave = useCallback(async () => {
     pauseAria();
@@ -293,7 +310,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
             {Object.values(remoteUsers)
               .filter(user => String(user.uid) !== '100')
               .map(user => {
-              const p = participants.find(part => hashUid(part.app_user_id) === Number(user.uid));
+              const p = participants.find(part => Boolean(part.app_user_id) && hashUid(part.app_user_id) === Number(user.uid));
               return (
                 <VideoTile
                   key={user.uid}

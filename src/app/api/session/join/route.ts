@@ -69,6 +69,8 @@ export async function POST(request: Request) {
           role,
           learning_level: data.learningLevel,
           language:      data.language,
+          left_at:       null,
+          joined_at:     new Date().toISOString(),
         },
         { onConflict: 'session_id,app_user_id' }
       );

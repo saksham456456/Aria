@@ -1,14 +1,37 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng';
+import { AgoraUser } from '@/types/agora';
 
 interface AriaTileProps {
-  user?: IAgoraRTCRemoteUser;
+  user?: AgoraUser | IAgoraRTCRemoteUser;
 }
 
 export default function AriaTile({ user }: AriaTileProps) {
   const isConnected = !!user;
-  const isSpeaking = user?.hasAudio;
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  useEffect(() => {
+    if (!user || !user.hasAudio || !user.audioTrack) {
+      setIsSpeaking(false);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      try {
+        const level = user.audioTrack?.getVolumeLevel() ?? 0;
+        setIsSpeaking(level > 0.05);
+      } catch {
+        setIsSpeaking(false);
+      }
+    }, 150);
+
+    return () => {
+      clearInterval(interval);
+      setIsSpeaking(false);
+    };
+  }, [user, user?.hasAudio, user?.audioTrack]);
 
   const border = isSpeaking ? 'border-aria-purple animate-pulse-ring' : 'border-aria-purple/40';
   const bg = isSpeaking ? 'bg-aria-purple-dim/30' : 'bg-aria-purple-dim/20';

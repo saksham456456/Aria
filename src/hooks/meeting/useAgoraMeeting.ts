@@ -15,7 +15,7 @@ import { hashUid } from '@/lib/uid';
 export function useAgoraMeeting(sessionId: string, appUserId: string) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [localAudioTrack, setLocalAudioTrack] = useState<IMicrophoneAudioTrack | null>(null);
-  const [localVideoTrack, setLocalVideoTrack] = useState<ICameraVideoTrack | null>(null);
+  const [localVideoTrack, setLocalVideoTrack] = useState<ILocalVideoTrack | null>(null);
   const [remoteUsers, setRemoteUsers] = useState<Record<string, AgoraUser>>({});
   const [isMicEnabled, setIsMicEnabled] = useState(true);
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
@@ -101,6 +101,64 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
         });
       });
 
+      client.on('user-mute-audio', (user: IAgoraRTCRemoteUser) => {
+        const uid = String(user.uid);
+        setRemoteUsers(prev => {
+          if (!prev[uid]) return prev;
+          return {
+            ...prev,
+            [uid]: {
+              ...prev[uid],
+              hasAudio: false,
+            },
+          };
+        });
+      });
+
+      client.on('user-unmute-audio', (user: IAgoraRTCRemoteUser) => {
+        const uid = String(user.uid);
+        setRemoteUsers(prev => {
+          if (!prev[uid]) return prev;
+          return {
+            ...prev,
+            [uid]: {
+              ...prev[uid],
+              hasAudio: true,
+            },
+          };
+        });
+      });
+
+      client.on('user-mute-video', (user: IAgoraRTCRemoteUser) => {
+        const uid = String(user.uid);
+        setRemoteUsers(prev => {
+          if (!prev[uid]) return prev;
+          return {
+            ...prev,
+            [uid]: {
+              ...prev[uid],
+              hasVideo: false,
+            },
+          };
+        });
+      });
+
+      client.on('user-unmute-video', (user: IAgoraRTCRemoteUser) => {
+        const uid = String(user.uid);
+        setRemoteUsers(prev => {
+          if (!prev[uid]) return prev;
+          return {
+            ...prev,
+            [uid]: {
+              ...prev[uid],
+              hasVideo: true,
+            },
+          };
+        });
+      });
+
+      client.enableAudioVolumeIndicator();
+
       client.on('connection-state-change', (curState) => {
         const stateMap: Record<string, ConnectionState> = {
           DISCONNECTED:  'disconnected',
@@ -147,6 +205,7 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
     joinMeeting();
 
     return () => {
+      initRef.current = false;
       const client = getAgoraClient();
       client.removeAllListeners();
       // Use refs, not state, so we always close the actual live tracks
@@ -187,6 +246,9 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
         screenTrack.close();
         if (localVideoRef.current) {
           await client.publish(localVideoRef.current);
+          setLocalVideoTrack(localVideoRef.current);
+        } else {
+          setLocalVideoTrack(null);
         }
         screenTrackRef.current = null;
         setIsScreenSharing(false);
@@ -197,6 +259,7 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
       }
       await client.publish(screenTrack);
       screenTrackRef.current = screenTrack;
+      setLocalVideoTrack(screenTrack);
       setIsScreenSharing(true);
     } catch (err) {
       // User cancelled the permission dialog — not an error worth surfacing
@@ -213,11 +276,15 @@ export function useAgoraMeeting(sessionId: string, appUserId: string) {
     }
     if (localVideoRef.current) {
       await client.publish(localVideoRef.current);
+      setLocalVideoTrack(localVideoRef.current);
+    } else {
+      setLocalVideoTrack(null);
     }
     setIsScreenSharing(false);
   }, []);
 
   const leave = useCallback(async () => {
+    initRef.current = false;
     const client = getAgoraClient();
     localAudioRef.current?.close();
     localVideoRef.current?.close();

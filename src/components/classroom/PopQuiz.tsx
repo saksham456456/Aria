@@ -18,7 +18,9 @@ export default function PopQuiz({ sessionId, appUserId, isTeacher = false }: Pop
   useEffect(() => {
     const supabase = getSupabaseBrowser(appUserId);
 
-    const channel = supabase.channel(`quiz-${sessionId}`)
+    const channel = supabase.channel(`quiz-${sessionId}`, {
+      config: { broadcast: { self: true } },
+    })
       .on('broadcast', { event: 'new_quiz' }, (payload) => {
         setQuiz(payload.payload.quiz);
         setAnswers({});

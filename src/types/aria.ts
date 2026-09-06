@@ -1,19 +1,19 @@
 import { z } from 'zod';
 
 export const AriaResponseSchema = z.object({
-  shouldSpeak: z.boolean(),
-  urgency: z.number().min(0).max(10).optional(),
-  target: z.enum(['class', 'student', 'teacher']).optional(),
-  targetStudentName: z.string().optional(),
+  shouldSpeak: z.boolean().default(false),
+  urgency: z.coerce.number().min(0).max(10).default(0).optional(),
+  target: z.enum(['class', 'student', 'teacher']).default('class').optional(),
+  targetStudentName: z.string().default('').optional(),
   language: z.string().default('en').optional(),
-  responseType: z.enum(['explanation', 'quiz_question', 'clarification', 'encouragement', 'silent_note', 'observation']).optional(),
-  response: z.string().optional(),
-  reason: z.string().optional(),
+  responseType: z.enum(['explanation', 'quiz_question', 'clarification', 'encouragement', 'silent_note', 'observation']).default('explanation').optional(),
+  response: z.string().default('').optional(),
+  reason: z.string().default('').optional(),
   detectedGaps: z.array(z.object({
-    concept: z.string(),
-    description: z.string(),
-    confidence: z.number().min(0).max(1)
-  })).optional()
+    concept: z.string().default(''),
+    description: z.string().default(''),
+    confidence: z.coerce.number().min(0).max(1).default(0)
+  })).default([])
 });
 
 export type AriaLLMResponse = z.infer<typeof AriaResponseSchema>;
