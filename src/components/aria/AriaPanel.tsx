@@ -2,9 +2,12 @@
 
 interface AriaPanelProps {
   onClose: () => void;
+  inviteAgent: () => void;
+  isInviting: boolean;
+  agentId: string | null;
 }
 
-export default function AriaPanel({ onClose }: AriaPanelProps) {
+export default function AriaPanel({ onClose, inviteAgent, isInviting, agentId }: AriaPanelProps) {
   return (
     <div className="w-80 shrink-0 border-l border-white/[0.06] bg-surface-0/95 backdrop-blur-xl flex flex-col h-full animate-slide-in-right">
       <div className="h-14 px-4 flex items-center justify-between border-b border-surface-3 shrink-0">
@@ -14,22 +17,43 @@ export default function AriaPanel({ onClose }: AriaPanelProps) {
           </div>
           <div>
             <p className="text-sm font-semibold text-white leading-tight">ARIA Co-Teacher</p>
-            <p className="text-[10px] leading-tight text-connected-green">Active</p>
+            <p className={`text-[10px] leading-tight ${agentId ? 'text-connected-green' : 'text-slate-400'}`}>
+              {agentId ? 'Active' : 'Offline'}
+            </p>
           </div>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
-        <div className="rounded-xl border border-connected-green/40 bg-connected-green/10 p-4 text-center shadow-lg shadow-connected-green/5">
-          <div className="w-10 h-10 mx-auto bg-connected-green/20 rounded-full flex items-center justify-center mb-3">
-            <span className="text-connected-green text-xl animate-pulse">Y&apos;</span>
+        {!agentId ? (
+          <div className="rounded-xl border border-aria-purple/40 bg-aria-purple/10 p-4 text-center shadow-lg shadow-aria-purple/5">
+            <div className="w-10 h-10 mx-auto bg-aria-purple/20 rounded-full flex items-center justify-center mb-3">
+              <span className="text-aria-purple text-xl">✋</span>
+            </div>
+            <p className="text-sm font-bold text-white mb-2">Wait for Students!</p>
+            <p className="text-xs text-slate-300 leading-relaxed mb-4">
+              To ensure ARIA can hear everyone, please wait for all students to join the room before inviting her.
+            </p>
+            <button
+              onClick={inviteAgent}
+              disabled={isInviting}
+              className="w-full py-2 bg-aria-purple hover:bg-aria-purple/80 text-white rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+            >
+              {isInviting ? 'Inviting...' : 'Invite ARIA Now'}
+            </button>
           </div>
-          <p className="text-sm font-bold text-white mb-1">Agora AI Engine Active</p>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            ARIA is fully powered by Agora&apos;s low-latency Conversational AI. She is currently listening to the classroom.
-          </p>
-        </div>
+        ) : (
+          <div className="rounded-xl border border-connected-green/40 bg-connected-green/10 p-4 text-center shadow-lg shadow-connected-green/5">
+            <div className="w-10 h-10 mx-auto bg-connected-green/20 rounded-full flex items-center justify-center mb-3">
+              <span className="text-connected-green text-xl animate-pulse">Y&apos;</span>
+            </div>
+            <p className="text-sm font-bold text-white mb-1">Agora AI Engine Active</p>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ARIA is fully powered by Agora&apos;s low-latency Conversational AI. She is currently listening to the classroom.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-3">
           <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">How to use ARIA</h3>
