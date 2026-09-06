@@ -76,38 +76,54 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [isTeacherSpeaking, setIsTeacherSpeaking] = useState(false);
 
-  const handleTriggerQuiz = async () => {
+  const [quizTopicPrompt, setQuizTopicPrompt] = useState(false);
+  const [quizTopic, setQuizTopic] = useState('');
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [quizPreview, setQuizPreview] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  const handleTriggerQuiz = () => {
+    setQuizTopic('');
+    setQuizTopicPrompt(true);
+  };
+
+  const handleGenerateQuiz = async () => {
+    if (!quizTopic.trim()) return;
     try {
-      if (!appUserId) return;
-      const res = await fetch('/api/quiz', {
+      setGeneratingQuiz(true);
+      const res = await fetch('/api/quiz/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': appUserId },
-        body: JSON.stringify({ sessionId })
+        headers: { 'Content-Type': 'application/json', 'x-user-id': appUserId! },
+        body: JSON.stringify({ sessionId, topic: quizTopic })
       });
-      
       const json = await res.json();
       if (!json.success) {
-        alert(`Quiz failed: ${json.error?.message || 'Unknown error'}`);
+        alert(`Quiz generation failed: ${json.error?.message || 'Unknown error'}`);
         return;
       }
-      if (json.success && json.data?.quiz) {
-        // Teacher's client handles the broadcast because serverless edge functions drop websockets
-        const supabase = getSupabaseBrowser(appUserId);
-        const channel = supabase.channel(`quiz-${sessionId}`);
-        channel.subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            await channel.send({
-              type: 'broadcast',
-              event: 'new_quiz',
-              payload: { quiz: json.data.quiz },
-            });
-          }
-        });
-      }
+      setQuizTopicPrompt(false);
+      setQuizPreview(json.data.quiz);
     } catch (err) {
-      console.error('Failed to trigger quiz:', err);
-      alert('Failed to trigger quiz. Check console for details.');
+      console.error('Failed to generate quiz:', err);
+      alert('Failed to generate quiz.');
+    } finally {
+      setGeneratingQuiz(false);
     }
+  };
+
+  const handleApproveQuiz = async () => {
+    if (!quizPreview) return;
+    const supabase = getSupabaseBrowser(appUserId!);
+    const channel = supabase.channel(`quiz-${sessionId}`);
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.send({
+          type: 'broadcast',
+          event: 'new_quiz',
+          payload: { quiz: quizPreview },
+        });
+        setQuizPreview(null);
+      }
+    });
   };
 
   const localParticipant = useMemo(
@@ -295,7 +311,57 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
           </VideoGrid>
 
           {/* WOW Factor Components */}
-          {appUserId && <PopQuiz sessionId={sessionId} appUserId={appUserId} />}
+          {appUserId && (
+            <PopQuiz 
+              sessionId={sessionId} 
+              appUserId={appUserId} 
+              studentName={localParticipant?.name}
+            />
+          )}
+          
+          {quizPreview && (
+            <PopQuiz 
+              sessionId={sessionId} 
+              appUserId={appUserId}
+              isTeacher={true}
+              previewQuiz={quizPreview}
+              onApprovePreview={handleApproveQuiz}
+              onCancelPreview={() => setQuizPreview(null)}
+            />
+          )}
+
+          {quizTopicPrompt && (
+            <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="glass-heavy max-w-md w-full rounded-2xl p-6 border border-emerald-500/30 shadow-2xl">
+                <h2 className="text-xl font-bold text-white mb-2">Create AI Pop Quiz</h2>
+                <p className="text-sm text-slate-300 mb-4">Enter a topic for ARIA to generate a 3-question quiz about.</p>
+                <input 
+                  type="text" 
+                  value={quizTopic} 
+                  onChange={e => setQuizTopic(e.target.value)} 
+                  placeholder="e.g. Photosynthesis, Newton's Laws..." 
+                  className="w-full bg-surface-2 border border-surface-3 rounded-lg p-3 text-white placeholder-slate-500 mb-6 focus:outline-none focus:border-emerald-500"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-3">
+                  <button 
+                    onClick={() => setQuizTopicPrompt(false)}
+                    className="px-4 py-2 text-sm text-slate-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleGenerateQuiz}
+                    disabled={!quizTopic.trim() || generatingQuiz}
+                    className="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg font-medium"
+                  >
+                    {generatingQuiz ? 'Generating...' : 'Generate Quiz'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isTeacher && appUserId && <ConfusionMeter sessionId={sessionId} appUserId={appUserId} />}
           {appUserId && (
             <AgentBrainTerminal 

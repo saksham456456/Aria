@@ -50,7 +50,7 @@ export default function AgentBrainTerminal({ sessionId, appUserId, isOpen }: Ter
     if (!isOpen) return;
     const supabase = getSupabaseBrowser(appUserId);
 
-    const channel = supabase.channel(`terminal-${sessionId}`)
+      const channel = supabase.channel(`terminal-${sessionId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'transcript_segments', filter: `session_id=eq.${sessionId}` },
@@ -63,6 +63,28 @@ export default function AgentBrainTerminal({ sessionId, appUserId, isOpen }: Ter
             setTimeout(() => addLog('llm', `[CONTEXT WINDOW UPDATED] Analyzing "${text}"...`), 300);
             setTimeout(() => addLog('llm', `[INFERENCE] Generating optimal pedagogical response...`), 800);
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'participants', filter: `session_id=eq.${sessionId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            addLog('system', `[EVENT] ${payload.new.name} joined the classroom.`);
+          } else if (payload.eventType === 'UPDATE') {
+            if (payload.new.left_at && !payload.old.left_at) {
+              addLog('system', `[EVENT] ${payload.new.name} disconnected.`);
+            } else if (!payload.new.left_at && payload.old.left_at) {
+              addLog('system', `[EVENT] ${payload.new.name} reconnected.`);
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `session_id=eq.${sessionId}` },
+        (payload) => {
+          addLog('network', `[CHAT] ${payload.new.sender_name}: ${payload.new.content}`);
         }
       )
       .subscribe();

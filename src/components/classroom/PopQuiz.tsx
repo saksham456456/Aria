@@ -7,14 +7,25 @@ import { CheckCircle, XCircle } from 'lucide-react';
 interface PopQuizProps {
   sessionId: string;
   appUserId: string;
+  isTeacher?: boolean;
+  previewQuiz?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onCancelPreview?: () => void;
+  onApprovePreview?: () => void;
+  studentName?: string;
 }
 
-export default function PopQuiz({ sessionId, appUserId }: PopQuizProps) {
+export default function PopQuiz({ sessionId, appUserId, isTeacher, previewQuiz, onCancelPreview, onApprovePreview, studentName }: PopQuizProps) {
   const [quiz, setQuiz] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [submittingResult, setSubmittingResult] = useState(false);
 
   useEffect(() => {
+    if (previewQuiz) {
+      setQuiz(previewQuiz);
+      return;
+    }
+
     const supabase = getSupabaseBrowser(appUserId);
 
     const channel = supabase.channel(`quiz-${sessionId}`)
@@ -28,12 +39,12 @@ export default function PopQuiz({ sessionId, appUserId }: PopQuizProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [sessionId, appUserId]);
+  }, [sessionId, appUserId, previewQuiz]);
 
   if (!quiz) return null;
 
   const handleSelect = (qIndex: number, option: string) => {
-    if (submitted) return;
+    if (submitted || isTeacher) return;
     setAnswers(prev => ({ ...prev, [qIndex]: option }));
   };
 
@@ -46,12 +57,42 @@ export default function PopQuiz({ sessionId, appUserId }: PopQuizProps) {
     return score;
   };
 
+  const handleSubmit = async () => {
+    if (isTeacher) return;
+    setSubmitted(true);
+    setSubmittingResult(true);
+
+    const score = calculateScore();
+    const total = quiz.questions.length;
+
+    try {
+      await fetch('/api/quiz/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': appUserId },
+        body: JSON.stringify({
+          sessionId,
+          studentName: studentName || 'A Student',
+          score,
+          total
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to submit quiz score', err);
+    } finally {
+      setSubmittingResult(false);
+    }
+  };
+
   return (
     <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="glass-heavy max-w-lg w-full rounded-2xl p-6 border border-aria-purple/30 shadow-2xl animate-in zoom-in-95 duration-300">
         <div className="text-center mb-6">
-          <h2 className="text-xl font-bold text-white tracking-tight">Pop Quiz!</h2>
-          <p className="text-sm text-aria-purple-light mt-1">Based on what ARIA just explained</p>
+          <h2 className="text-xl font-bold text-white tracking-tight">
+            {isTeacher ? 'Review AI Quiz' : 'Pop Quiz!'}
+          </h2>
+          <p className="text-sm text-aria-purple-light mt-1">
+            {isTeacher ? 'Approve this generated quiz to send to all students' : 'Answer all questions to continue'}
+          </p>
         </div>
 
         <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -67,7 +108,14 @@ export default function PopQuiz({ sessionId, appUserId }: PopQuizProps) {
                   let optStyle = 'border-surface-3 bg-surface-2 hover:border-aria-purple/50 cursor-pointer';
                   let icon = null;
 
-                  if (submitted) {
+                  if (isTeacher) {
+                    if (isCorrect) {
+                      optStyle = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100';
+                      icon = <CheckCircle className="w-4 h-4 text-emerald-400" />;
+                    } else {
+                      optStyle = 'border-surface-3 bg-surface-1/50 opacity-50 cursor-default';
+                    }
+                  } else if (submitted) {
                     if (isCorrect) {
                       optStyle = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100';
                       icon = <CheckCircle className="w-4 h-4 text-emerald-400" />;
@@ -93,9 +141,9 @@ export default function PopQuiz({ sessionId, appUserId }: PopQuizProps) {
                   );
                 })}
               </div>
-              {submitted && answers[i] !== q.correctAnswer && (
+              {((submitted && answers[i] !== q.correctAnswer) || isTeacher) && (
                 <p className="text-xs text-slate-400 bg-black/40 p-2 rounded border border-surface-3">
-                  <span className="text-emerald-400 font-semibold">Hint:</span> {q.explanation}
+                  <span className="text-emerald-400 font-semibold">Explanation:</span> {q.explanation}
                 </p>
               )}
             </div>
@@ -103,7 +151,9 @@ export default function PopQuiz({ sessionId, appUserId }: PopQuizProps) {
         </div>
 
         <div className="mt-6 flex items-center justify-between">
-          {submitted ? (
+          {isTeacher ? (
+            <div className="text-xs text-slate-400">Preview Mode</div>
+          ) : submitted ? (
             <div className="text-sm font-semibold">
               Score: <span className={calculateScore() === quiz.questions.length ? 'text-emerald-400' : 'text-amber-400'}>{calculateScore()} / {quiz.questions.length}</span>
             </div>
@@ -112,13 +162,26 @@ export default function PopQuiz({ sessionId, appUserId }: PopQuizProps) {
           )}
           
           <div className="flex gap-3">
-            {submitted ? (
-              <button onClick={() => setQuiz(null)} className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors">
-                Close
+            {isTeacher ? (
+              <>
+                <button onClick={onCancelPreview} className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors">
+                  Cancel
+                </button>
+                <button onClick={onApprovePreview} className="px-5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-sm font-medium transition-colors">
+                  Approve & Broadcast
+                </button>
+              </>
+            ) : submitted ? (
+              <button 
+                onClick={() => setQuiz(null)} 
+                disabled={submittingResult}
+                className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {submittingResult ? 'Publishing...' : 'Close'}
               </button>
             ) : (
               <button 
-                onClick={() => setSubmitted(true)}
+                onClick={handleSubmit}
                 disabled={Object.keys(answers).length < quiz.questions.length}
                 className="px-5 py-2 bg-aria-purple hover:bg-aria-purple-dark disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
               >
