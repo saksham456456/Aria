@@ -40,6 +40,7 @@ export default function SummaryView({ sessionId, appUserId }: { sessionId: strin
   const [summary,   setSummary]   = useState<SessionSummary | null>(null);
   const [isTeacher, setIsTeacher] = useState(false);
   const [error,     setError]     = useState('');
+  const [timeLeft,  setTimeLeft]  = useState(150); // 2.5 minutes for students
 
   const fetchExistingSummary = useCallback(async () => {
     if (!appUserId) return { data: null, teacher: false };
@@ -100,6 +101,20 @@ export default function SummaryView({ sessionId, appUserId }: { sessionId: strin
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appUserId, sessionId]);
+
+  useEffect(() => {
+    if (viewState !== 'ready' || isTeacher || timeLeft <= 0) return;
+    const timer = setInterval(() => {
+      setTimeLeft(prev => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [viewState, isTeacher, timeLeft]);
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
 
   const BackButton = () => (
     <button
@@ -177,19 +192,21 @@ export default function SummaryView({ sessionId, appUserId }: { sessionId: strin
                 Regenerate
               </button>
             )}
-            <button
-              onClick={() => router.push('/')}
-              className="px-4 py-2 bg-aria-purple hover:bg-aria-purple/80 text-white rounded-xl text-sm font-semibold transition-colors"
-            >
-              Back to Home
-            </button>
+            
+            {!isTeacher && timeLeft > 0 ? (
+              <div className="px-4 py-2 bg-surface-2 border border-surface-3 text-amber-400 rounded-xl text-sm font-semibold flex items-center gap-2">
+                <span className="w-4 h-4 animate-spin border-2 border-amber-400 border-t-transparent rounded-full" />
+                Review time: {formatTime(timeLeft)}
+              </div>
+            ) : (
+              <button
+                onClick={() => router.push('/')}
+                className="px-4 py-2 bg-aria-purple hover:bg-aria-purple/80 text-white rounded-xl text-sm font-semibold transition-colors"
+              >
+                Back to Home
+              </button>
+            )}
           </div>
-        </div>
-
-        {/* ARIA interventions badge */}
-        <div className="inline-flex items-center gap-2 bg-aria-purple/10 border border-aria-purple/20 rounded-full px-4 py-2">
-          <span className="text-aria-purple-light font-bold text-lg">{summary.aria_interventions_count ?? 0}</span>
-          <span className="text-aria-purple-light text-sm">ARIA interventions during this session</span>
         </div>
 
         {/* Overview */}
@@ -208,82 +225,29 @@ export default function SummaryView({ sessionId, appUserId }: { sessionId: strin
           </Card>
         )}
 
-        {/* Learning gaps */}
-        {summary.common_learning_gaps?.length > 0 && (
-          <Card icon="⚠️" title="Learning Gaps" color="text-warning-amber">
-            <div className="space-y-3">
-              {summary.common_learning_gaps.map((g, i) => (
-                <div key={i} className="bg-surface-2 border border-surface-3 rounded-xl p-4">
-                  <p className="font-semibold text-sm text-white mb-1">{g.concept}</p>
-                  <p className="text-xs text-slate-400 mb-2 leading-relaxed">{g.description}</p>
-                  {g.affectedStudents?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {g.affectedStudents.map((s, j) => (
-                        <span key={j} className="text-[10px] bg-live-red/10 border border-live-red/20 text-live-red px-2 py-0.5 rounded-full">{s}</span>
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-xs text-connected-green leading-relaxed">
-                    <span className="font-semibold">Recommendation: </span>{g.recommendation}
-                  </p>
-                </div>
-              ))}
+        {/* Custom Key Points from Teacher's End Class prompt */}
+        {summary.recommendations && summary.recommendations.length > 0 && (
+          <Card icon="💡" title="Key Points & Takeaways" color="text-aria-purple-light">
+            <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+              {summary.recommendations}
             </div>
           </Card>
         )}
-
-        {/* Student insights */}
-        {summary.student_insights?.length > 0 && (
-          <Card icon="👤" title="Student Insights" color="text-role-student">
-            <div className="space-y-3">
-              {summary.student_insights.map((s, i) => (
-                <div key={i} className="bg-surface-2 border border-surface-3 rounded-xl p-4">
-                  <p className="font-semibold text-sm text-white mb-2">{s.studentName}</p>
-                  {s.strengths?.length > 0 && (
-                    <div className="mb-2">
-                      <p className="text-[10px] font-semibold text-connected-green uppercase tracking-wide mb-1">Strengths</p>
-                      <ul className="space-y-0.5">
-                        {s.strengths.map((str, j) => (
-                          <li key={j} className="text-xs text-slate-300 flex items-start gap-1.5">
-                            <span className="text-connected-green mt-0.5">✓</span>{str}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {s.needsSupport?.length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-semibold text-warning-amber uppercase tracking-wide mb-1">Needs Support</p>
-                      <ul className="space-y-0.5">
-                        {s.needsSupport.map((n, j) => (
-                          <li key={j} className="text-xs text-slate-300 flex items-start gap-1.5">
-                            <span className="text-warning-amber mt-0.5">→</span>{n}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Recommendations */}
-        {summary.recommendations && (
-          <Card icon="💡" title="Recommendations" color="text-aria-purple-light">
-            <p className="text-slate-300 text-sm leading-relaxed">{summary.recommendations}</p>
-          </Card>
-        )}
-
+        
         {/* Footer */}
         <div className="pt-4 pb-10 text-center">
-          <button
-            onClick={() => router.push('/')}
-            className="px-6 py-3 bg-surface-1 hover:bg-surface-2 border border-surface-3 hover:border-slate-500 text-white rounded-xl text-sm font-semibold transition-colors"
-          >
-            ← Back to Home
-          </button>
+          {!isTeacher && timeLeft > 0 ? (
+            <div className="inline-block px-6 py-3 bg-surface-1 border border-surface-3 text-slate-400 rounded-xl text-sm font-semibold">
+              Please review the summary for {formatTime(timeLeft)} before leaving
+            </div>
+          ) : (
+            <button
+              onClick={() => router.push('/')}
+              className="px-6 py-3 bg-surface-1 hover:bg-surface-2 border border-surface-3 hover:border-slate-500 text-white rounded-xl text-sm font-semibold transition-colors"
+            >
+              ← Back to Home
+            </button>
+          )}
         </div>
       </div>
     </div>
