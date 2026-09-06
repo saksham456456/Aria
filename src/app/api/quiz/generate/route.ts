@@ -75,7 +75,8 @@ Must return JSON matching this schema:
 
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {
-      return errorResponse('validation_error', err.errors.map(e => e.message).join(', '));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return errorResponse('validation_error', (err as any).errors.map((e: any) => e.message).join(', '));
     }
     return errorResponse('internal_error', err instanceof Error ? err.message : 'Unknown error', 500);
   }
