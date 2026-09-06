@@ -53,6 +53,7 @@ export async function POST(request: Request) {
           role:          'student',
           learning_level: data.learningLevel,
           language:      data.language,
+          left_at:       null, // Allow rejoining after accidental disconnect
         },
         { onConflict: 'session_id,app_user_id' }
       );
