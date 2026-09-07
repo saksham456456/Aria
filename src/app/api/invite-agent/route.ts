@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       .withLlm(
         new OpenAI({
           apiKey: requireEnv('GROQ_API_KEY'),
-          url: 'https://api.groq.com/openai/v1',
+          url: 'https://api.groq.com/openai/v1/chat/completions',
           model: 'llama-3.1-8b-instant',
           greetingMessage: GREETING,
           failureMessage: 'Please wait a moment.',

@@ -245,6 +245,20 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
   const [endingClass, setEndingClass] = useState(false);
   const [summaryPreview, setSummaryPreview] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
+  const handleSkipSummaryAndEnd = useCallback(async () => {
+    try {
+      setEndingClass(true);
+      pauseAria();
+      const supabase = getSupabaseBrowser(appUserId!);
+      await supabase.from('sessions').update({ status: 'ending' }).eq('id', sessionId);
+      await handleLeave();
+    } catch (err) {
+      console.error('Failed to end class without summary', err);
+    } finally {
+      setEndingClass(false);
+    }
+  }, [pauseAria, appUserId, sessionId, handleLeave]);
+
   const handleGenerateSummary = useCallback(async (topics: string) => {
     setEndingClass(true);
     try {
@@ -468,6 +482,7 @@ function MeetingRoomInner({ sessionId, appUserId }: { sessionId: string; appUser
         isLoading={endingClass}
         onConfirm={handleGenerateSummary}
         onCancel={() => setShowEndDialog(false)}
+        onSkip={handleSkipSummaryAndEnd}
       />
 
       {summaryPreview && (

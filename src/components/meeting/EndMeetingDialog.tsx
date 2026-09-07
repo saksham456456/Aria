@@ -7,9 +7,10 @@ interface EndMeetingDialogProps {
   isLoading?: boolean;
   onConfirm:  (topics: string) => void;
   onCancel:   () => void;
+  onSkip:     () => void;
 }
 
-export default function EndMeetingDialog({ isOpen, isLoading, onConfirm, onCancel }: EndMeetingDialogProps) {
+export default function EndMeetingDialog({ isOpen, isLoading, onConfirm, onCancel, onSkip }: EndMeetingDialogProps) {
   const [topics, setTopics] = useState('');
 
   if (!isOpen) return null;
@@ -44,20 +45,29 @@ export default function EndMeetingDialog({ isOpen, isLoading, onConfirm, onCance
           />
         </div>
 
-        <div className="flex gap-3 justify-end">
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={onCancel}
+              disabled={isLoading}
+              className="px-4 py-2 text-sm font-medium text-slate-300 bg-surface-2 border border-surface-3 hover:border-slate-500 rounded-xl transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onConfirm(topics)}
+              disabled={!topics.trim() || isLoading}
+              className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
+            >
+              {isLoading ? 'Generating...' : 'Generate Summary & End'}
+            </button>
+          </div>
           <button
-            onClick={onCancel}
+            onClick={onSkip}
             disabled={isLoading}
-            className="px-4 py-2 text-sm font-medium text-slate-300 bg-surface-2 border border-surface-3 hover:border-slate-500 rounded-xl transition-colors disabled:opacity-50"
+            className="w-full py-2 text-sm font-medium text-white bg-live-red hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
           >
-            Cancel
-          </button>
-          <button
-            onClick={() => onConfirm(topics)}
-            disabled={!topics.trim() || isLoading}
-            className="px-4 py-2 text-sm font-medium text-white bg-live-red hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
-          >
-            {isLoading ? 'Generating...' : 'Generate Summary & End'}
+            Skip Summary & End Class
           </button>
         </div>
       </div>

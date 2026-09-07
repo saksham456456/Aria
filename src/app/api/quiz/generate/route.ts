@@ -64,7 +64,8 @@ Must return JSON matching this schema:
       });
 
       const rawContent = completion.choices[0]?.message?.content ?? '{}';
-      const parsedJson = JSON.parse(rawContent);
+      const cleanContent = rawContent.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsedJson = JSON.parse(cleanContent);
       validatedQuiz = QuizResponseSchema.parse(parsedJson);
     } catch (apiError) {
       console.error('Groq API failed:', apiError);
