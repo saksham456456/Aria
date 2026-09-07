@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
         new OpenAI({
           apiKey: requireEnv('GROQ_API_KEY'),
           url: 'https://api.groq.com/openai/v1',
-          model: 'llama-3.3-70b-versatile',
+          model: 'llama-3.1-8b-instant',
           greetingMessage: GREETING,
           failureMessage: 'Please wait a moment.',
           maxHistory: 15,

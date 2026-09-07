@@ -57,7 +57,7 @@ Must return JSON matching this schema:
     let validatedQuiz;
     try {
       const completion = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         messages: [{ role: 'system', content: systemMessage }],
         response_format: { type: 'json_object' },
         temperature: 0.7,
