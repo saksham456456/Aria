@@ -112,7 +112,9 @@ export async function POST(request: NextRequest) {
       )
       .withLlm(
         new OpenAI({
-          model: 'gpt-4o-mini',
+          apiKey: requireEnv('GROQ_API_KEY'),
+          url: 'https://api.groq.com/openai/v1',
+          model: 'llama-3.3-70b-versatile',
           greetingMessage: GREETING,
           failureMessage: 'Please wait a moment.',
           maxHistory: 15,
