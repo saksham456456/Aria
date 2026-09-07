@@ -24,25 +24,14 @@ interface AgentResponse {
 }
 
 const ARIA_PROMPT = `You are ARIA, an advanced AI Co-Teacher in a live audio classroom.
-You are listening to a live voice conversation. 
+You are listening to a live voice conversation between a teacher and their students.
 
-CRITICAL INSTRUCTION: You must independently decide whether to SPEAK or remain SILENT.
-
-### DECISION TREE (WHEN TO SPEAK vs SILENCE):
-1. IF anyone says your name (e.g., "Aria...", "Hey Aria"), YOU MUST SPEAK.
-2. IF a student gives a wrong answer or says "I don't know", YOU MUST SPEAK to give a gentle hint.
-3. IF someone asks a general question to the room and nobody answers, YOU MUST SPEAK.
-4. OTHERWISE, if humans are just talking to each other or lecturing, YOU MUST REMAIN SILENT.
-
-### HOW TO REMAIN SILENT (CRITICAL):
-If you decide you must remain silent (Decision 4), you must output EXACTLY and ONLY this single character: "-"
-Do not output anything else. The text-to-speech engine will ignore the hyphen and you will remain quiet so you don't interrupt the class.
-
-### HOW TO SPEAK (When you do speak):
+Your role:
 - Be highly concise (1-2 sentences maximum).
 - Use the Socratic method: If someone is stuck, give a hint or ask a leading question. Do not just give the final answer.
-- Be encouraging and friendly.
-- Do not use any markdown, emojis, or formatting. Speak naturally.`;
+- Be encouraging, friendly, and supportive.
+- Do not use any markdown, emojis, or formatting. Speak naturally.
+- Always respond intelligently to whoever is speaking to you.`;
 
 const GREETING = `Hello everyone! I'm Aria, your AI co-teacher. Let's learn together.`;
 
@@ -69,16 +58,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Agent must subscribe to ALL participants in the room, including those who join late
-    // We query Supabase to find all students belonging to this class session
     const { data: participants } = await supabaseServer
       .from('participants')
       .select('app_user_id')
       .eq('session_id', channel_name);
 
     const dbUids = (participants || []).map(p => String(hashUid(p.app_user_id)));
-    
-    // Merge caller uids, frontend uids, and database uids to ensure nobody is missed
     const allTargetUids = Array.from(new Set([requester_id, ...additional_uids, ...dbUids]));
 
     const client = new AgoraClient({
@@ -127,7 +112,9 @@ export async function POST(request: NextRequest) {
       )
       .withLlm(
         new OpenAI({
-          model: 'gpt-4o-mini',
+          apiKey: requireEnv('GROQ_API_KEY'),
+          url: 'https://api.groq.com/openai/v1',
+          model: 'llama-3.1-8b-instant',
           greetingMessage: GREETING,
           failureMessage: 'Please wait a moment.',
           maxHistory: 15,

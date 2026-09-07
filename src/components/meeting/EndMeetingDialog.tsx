@@ -1,12 +1,17 @@
 'use client';
 
+import { useState } from 'react';
+
 interface EndMeetingDialogProps {
   isOpen:     boolean;
-  onConfirm:  () => void;
+  isLoading?: boolean;
+  onConfirm:  (topics: string) => void;
   onCancel:   () => void;
 }
 
-export default function EndMeetingDialog({ isOpen, onConfirm, onCancel }: EndMeetingDialogProps) {
+export default function EndMeetingDialog({ isOpen, isLoading, onConfirm, onCancel }: EndMeetingDialogProps) {
+  const [topics, setTopics] = useState('');
+
   if (!isOpen) return null;
 
   return (
@@ -20,21 +25,39 @@ export default function EndMeetingDialog({ isOpen, onConfirm, onCancel }: EndMee
           </div>
           <h2 className="text-lg font-bold text-white">End class?</h2>
         </div>
-        <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-          This will end the session for <strong className="text-white">all participants</strong>. ARIA will generate a post-session summary.
+        
+        <p className="text-slate-400 text-sm mb-4 leading-relaxed">
+          This will end the session for <strong className="text-white">all participants</strong>.
         </p>
+
+        <div className="mb-6">
+          <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+            Topics Covered (For Summary)
+          </label>
+          <input
+            type="text"
+            value={topics}
+            onChange={(e) => setTopics(e.target.value)}
+            disabled={isLoading}
+            placeholder="e.g. Newton's 3rd Law, Gravity..."
+            className="w-full bg-surface-2 border border-surface-3 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-live-red disabled:opacity-50"
+          />
+        </div>
+
         <div className="flex gap-3 justify-end">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-slate-300 bg-surface-2 border border-surface-3 hover:border-slate-500 rounded-xl transition-colors"
+            disabled={isLoading}
+            className="px-4 py-2 text-sm font-medium text-slate-300 bg-surface-2 border border-surface-3 hover:border-slate-500 rounded-xl transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white bg-live-red hover:bg-red-500 rounded-xl transition-colors"
+            onClick={() => onConfirm(topics)}
+            disabled={!topics.trim() || isLoading}
+            className="px-4 py-2 text-sm font-medium text-white bg-live-red hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
           >
-            End class
+            {isLoading ? 'Generating...' : 'Generate Summary & End'}
           </button>
         </div>
       </div>

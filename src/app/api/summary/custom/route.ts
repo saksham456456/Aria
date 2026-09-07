@@ -5,20 +5,16 @@ import { errorResponse, successResponse } from '@/lib/api';
 import { supabaseServer } from '@/services/supabase/server';
 import { getGroqClient } from '@/services/groq/groqClient';
 
-const GenerateQuizSchema = z.object({
+const CustomSummarySchema = z.object({
   sessionId: z.string().uuid(),
-  topic: z.string().min(1, 'Topic is required'),
+  topics: z.string().min(1),
+  saveToDb: z.boolean().default(false),
 });
 
-const QuizQuestionSchema = z.object({
-  question: z.string(),
-  options: z.array(z.string()),
-  correctAnswer: z.string(),
-  explanation: z.string(),
-});
-
-const QuizResponseSchema = z.object({
-  questions: z.array(QuizQuestionSchema),
+const SummaryResponseSchema = z.object({
+  overview: z.string(),
+  topics_covered: z.array(z.string()),
+  key_points: z.array(z.string()),
 });
 
 export async function POST(request: Request) {
@@ -27,7 +23,7 @@ export async function POST(request: Request) {
     if (!appUserId) return errorResponse('unauthorized', 'Missing x-user-id header', 401);
 
     const body = await request.json();
-    const data = GenerateQuizSchema.parse(body);
+    const data = CustomSummarySchema.parse(body);
 
     const { data: participant, error: pErr } = await supabaseServer
       .from('participants')
@@ -37,24 +33,19 @@ export async function POST(request: Request) {
       .single();
 
     if (pErr || participant?.role !== 'teacher') {
-      return errorResponse('forbidden', 'Only teachers can generate quizzes', 403);
+      return errorResponse('forbidden', 'Only teachers can generate summaries', 403);
     }
 
     const groq = getGroqClient();
-    const systemMessage = `You are an AI teacher. Generate a 3-question multiple-choice pop quiz about: "${data.topic}".
+    const systemMessage = `You are an AI teacher assistant. Generate a class summary based on these topics: "${data.topics}".
 Must return JSON matching this schema:
 {
-  "questions": [
-    {
-      "question": "string",
-      "options": ["string", "string", "string", "string"],
-      "correctAnswer": "string (must exactly match one option)",
-      "explanation": "string (why is it correct?)"
-    }
-  ]
+  "overview": "string (1-2 sentences)",
+  "topics_covered": ["string", "string"],
+  "key_points": ["string", "string", "string"]
 }`;
 
-    let validatedQuiz;
+    let validatedSummary;
     try {
       const completion = await groq.chat.completions.create({
         model: 'llama-3.1-8b-instant',
@@ -65,13 +56,32 @@ Must return JSON matching this schema:
 
       const rawContent = completion.choices[0]?.message?.content ?? '{}';
       const parsedJson = JSON.parse(rawContent);
-      validatedQuiz = QuizResponseSchema.parse(parsedJson);
+      validatedSummary = SummaryResponseSchema.parse(parsedJson);
     } catch (apiError) {
       console.error('Groq API failed:', apiError);
-      return errorResponse('internal_error', 'Failed to generate quiz from AI provider', 500);
+      return errorResponse('internal_error', 'Failed to generate summary', 500);
     }
 
-    return successResponse({ quiz: validatedQuiz });
+    if (data.saveToDb) {
+      const { error: upsertErr } = await supabaseServer
+        .from('session_summaries')
+        .upsert({
+          session_id: data.sessionId,
+          overview: validatedSummary.overview,
+          topics_covered: validatedSummary.topics_covered,
+          recommendations: validatedSummary.key_points.join('\n\n'), // repurposing this field for key points
+          aria_interventions_count: 0,
+          common_learning_gaps: [],
+          student_insights: []
+        }, { onConflict: 'session_id' });
+
+      if (upsertErr) {
+        console.error('Failed to save summary:', upsertErr);
+        return errorResponse('internal_error', 'Failed to save summary', 500);
+      }
+    }
+
+    return successResponse({ summary: validatedSummary });
 
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {
