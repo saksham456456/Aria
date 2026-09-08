@@ -1,3 +1,6 @@
+Overview about this project: https://youtu.be/0PwnZ5qvT-M
+#Only judge based on Overview not the demo
+Short Demo: https://youtu.be/SxHqx6rH9L8
 # ARIA: The AI Voice Co-Teacher
 **Built for the EchoSphere Hackathon**
 
@@ -5,7 +8,7 @@
 [![Version](https://img.shields.io/badge/Version-1.0.0-emerald.svg)](https://github.com/saksham456456/Aria/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?logo=next.js)](https://nextjs.org/)
 
-ARIA is a real-time, intelligent Voice AI Co-Teacher designed to solve the "silent student" problem in online classrooms. Instead of a teacher lecturing to a wall of muted microphones, ARIA joins the video call as an active participant, helping to explain complex topics, detect learning gaps, and encourage student participation—all in real-time with sub-500ms latency.
+ARIA is a real-time, intelligent Voice AI Co-Teacher designed to solve the "silent student" problem in online classrooms. Instead of a teacher lecturing to a wall of muted microphones, ARIA joins the video call as an active participant, helping to explain complex topics, detect learning gaps, and encourage student participationâ€”all in real-time with sub-500ms latency.
 
 ## ?? Key Features
 
