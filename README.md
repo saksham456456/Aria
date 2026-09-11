@@ -1,4 +1,4 @@
-Overview about this project: https://youtu.be/0PwnZ5qvT-M
+﻿Overview about this project: https://youtu.be/0PwnZ5qvT-M
 #Only judge based on Overview not the demo
 
 Short Demo: https://youtu.be/SxHqx6rH9L8
@@ -12,7 +12,7 @@ Short Demo: https://youtu.be/SxHqx6rH9L8
 
 ARIA is a real-time, intelligent Voice AI Co-Teacher designed to solve the "silent student" problem in online classrooms. Instead of a teacher lecturing to a wall of muted microphones, ARIA joins the video call as an active participant, helping to explain complex topics, detect learning gaps, and encourage student participation—all in real-time with sub-500ms latency.
 
-## ?? Key Features
+## ✨ Key Features
 
 *   **Real-Time Video Classroom:** Seamless, low-latency video and audio rooms supporting multiple participants (Teacher & Students).
 *   **Agora Conversational AI:** ARIA is powered natively by the **Agora Conversational AI Engine**. She possesses deep social awareness, utilizing the **Socratic Method** to gently guide struggling students without interrupting the main teacher.
@@ -21,7 +21,7 @@ ARIA is a real-time, intelligent Voice AI Co-Teacher designed to solve the "sile
 *   **Agent Brain Terminal:** A cyberpunk-inspired side panel that visualizes the AI's "internal thoughts", streaming STT intercepts and LLM reasoning logs live to the teacher.
 *   **Post-Class Analytics:** At the end of a session, teachers receive an AI-generated summary of student insights and learning gaps.
 
-## ??? Tech Stack
+## 💻 Tech Stack
 
 *   **Frontend:** Next.js 14, React, Tailwind CSS, Lucide Icons
 *   **Database & Real-Time Sync:** Supabase (PostgreSQL + WebSockets)
@@ -29,7 +29,7 @@ ARIA is a real-time, intelligent Voice AI Co-Teacher designed to solve the "sile
 *   **Voice AI Engine (ARIA):** Agora Conversational AI SDK (`agora-agents`) using `gpt-4o-mini` and MiniMax TTS.
 *   **LLM Inference:** Groq (`llama-3.3-70b-versatile`) for instant Pop Quizzes and Post-Class Summaries.
 
-## ?? Running Locally
+## 🚀 Running Locally
 
 1. **Clone the repository:**
    ```bash
@@ -68,5 +68,5 @@ ARIA is a real-time, intelligent Voice AI Co-Teacher designed to solve the "sile
    Open `http://localhost:3000` in two different browsers (or one Incognito window) to simulate a Teacher and a Student joining the same classroom!
 
 ---
-*Built with ?? for the EchoSphere Hackathon.*
+*Built with ❤️ for the EchoSphere Hackathon.*
 
